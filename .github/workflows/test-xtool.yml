@@ -1,0 +1,31 @@
+name: Test xtool (macOS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-xtool:
+    name: Run xtool CLI Verification
+    runs-on: macos-latest
+    steps:
+      - name: Download and Install xtool
+        run: |
+          echo "== Downloading xtool for macOS..."
+          curl -fL "https://github.com/xtool-org/xtool/releases/latest/download/xtool.app.zip" -o xtool.zip
+          unzip -q xtool.zip
+          sudo mv xtool.app/Contents/MacOS/xtool /usr/local/bin/xtool || sudo mv xtool /usr/local/bin/xtool || true
+          chmod +x /usr/local/bin/xtool || true
+
+      - name: Verify xtool Installation
+        run: |
+          which xtool || true
+          xtool --version || true
+          xtool --help
+
+      - name: Create and Inspect Disposable xtool Project
+        run: |
+          xtool new Lro3Proof --skip-setup
+          cd Lro3Proof
+          ls -la
+          cat Package.swift
+          cat xtool.yml
