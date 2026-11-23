@@ -28,6 +28,8 @@ jobs:
       - name: Build Xcode Archive with Clang / LLVM
         run: |
           cd xcode
+          mkdir -p Il2CppOutputProject/Source/il2cppOutput
+          [ -f Il2CppOutputProject/Source/il2cppOutput/dummy.cpp ] || echo "// IL2CPP dummy" > Il2CppOutputProject/Source/il2cppOutput/dummy.cpp
           echo "== Compiling Unity-iPhone with xcodebuild..."
           xcodebuild -project Unity-iPhone.xcodeproj \
             -scheme Unity-iPhone \
