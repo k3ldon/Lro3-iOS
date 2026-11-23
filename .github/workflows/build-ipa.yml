@@ -1,106 +1,46 @@
-name: Build iOS IPA (Unity GameCI + Xcode)
+name: Compile iOS IPA (macOS Xcode Build)
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'App version (e.g. 1.0.0)'
+        description: 'App version'
         required: true
         default: '1.0.0'
-      server_url:
-        description: 'RO3Emu Server URL'
-        required: true
-        default: 'https://ro3.lagnarok.online'
-  push:
-    branches:
-      - main
-    paths:
-      - 'unity-template/**'
-      - 'hooks/**'
-      - 'tools/**'
-      - '.github/workflows/build-ipa.yml'
-    tags:
-      - 'v*'
 
 jobs:
-  export-xcode:
-    name: Unity GameCI Export Xcode Project
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: unity-template/Library
-          key: Library-iOS-${{ hashFiles('unity-template/**', 'hooks/**') }}
-          restore-keys: |
-            Library-iOS-
-
-      - name: Prepare Unity License File
-        env:
-          UNITY_LICENSE_DATA: ${{ secrets.UNITY_LICENSE }}
-        run: |
-          python3 -c "import os; open('Unity_lic.ulf', 'w', encoding='utf-8').write(os.environ['UNITY_LICENSE_DATA'])"
-          head -n 3 Unity_lic.ulf
-
-      - name: Unity Builder (Export iOS Project)
-        uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-        with:
-          targetPlatform: iOS
-          unityVersion: 2022.3.62f3
-          projectPath: unity-template
-          buildName: Lro3-Xcode
-          buildsPath: build
-          buildMethod: Ro3Ios.Editor.BuildIos.Build
-          skipActivation: "true"
-          customParameters: -manualLicenseFile /github/workspace/Unity_lic.ulf -ro3Out /github/workspace/build/iOS/xcode -ro3Version ${{ github.event.inputs.version || '1.0.0' }}
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Upload Xcode Project Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcode-project
-          path: build/iOS/xcode/
-          retention-days: 3
-
-  compile-ipa:
-    name: Compile and Package IPA (macOS)
-    needs: export-xcode
+  build-ipa:
+    name: Build Unity iOS Binary with Xcode
     runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download Xcode Project
-        uses: actions/download-artifact@v4
-        with:
-          name: xcode-project
-          path: xcode/
+      - name: Download Exported Xcode Project
+        run: |
+          echo "== Downloading exported Xcode project from release..."
+          gh release download v1.0.0-xcode -p "xcode-project.tar.gz" -R k3ldon/Lro3-iOS
+          tar -xzf xcode-project.tar.gz
+          ls -la xcode/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Xcode Project with Clang / LLVM
+      - name: Build Xcode Archive with Clang / LLVM
         run: |
           cd xcode
-          echo "== Building Unity-iPhone project..."
+          echo "== Compiling Unity-iPhone with xcodebuild..."
           xcodebuild -project Unity-iPhone.xcodeproj \
             -scheme Unity-iPhone \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
-            archive -archivePath build/Lro3.xcarchive
+            archive -archivePath ../build/Lro3.xcarchive
 
-          echo "== Assembling Payload directory..."
-          mkdir -p ../Payload
-          cp -r build/Lro3.xcarchive/Products/Applications/*.app ../Payload/
-          cd ..
+      - name: Package Payload and IPA
+        run: |
+          echo "== Assembling IPA payload..."
+          mkdir -p Payload
+          cp -r build/Lro3.xcarchive/Products/Applications/*.app Payload/
           zip -r9 Lro3-iOS.ipa Payload/
           ls -lh Lro3-iOS.ipa
 
@@ -111,10 +51,11 @@ jobs:
           path: Lro3-iOS.ipa
           retention-days: 14
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.0.0-ipa
+          name: "Lagnarok RO3 iOS Client v1.0.0"
           files: Lro3-iOS.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
