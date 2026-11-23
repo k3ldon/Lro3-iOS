@@ -26,7 +26,7 @@ on:
 jobs:
   build-darwin-natives:
     name: Compile Darwin ARM64 Native Bridges
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
   package-ipa:
     name: Package IPA for Sideloading
     needs: build-darwin-natives
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
