@@ -163,6 +163,8 @@ foreach (var file in Directory.GetFiles(managed, "*.dll").OrderBy(f => f))
     Console.WriteLine($"[IosPatch] {name}: __Internal={staticInternal}, winStubs={windowsCalls}, streamingAssets={redirected}, bundles={bundleLoads}, shaders={shaderFinds}");
 }
 
+resolver.Dispose();
+
 foreach (var (path, bytes) in rewritten)
 {
     File.WriteAllBytes(path, bytes);

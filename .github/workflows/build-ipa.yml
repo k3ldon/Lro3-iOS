@@ -1,4 +1,4 @@
-name: Build iOS IPA (Xcode / macos-14)
+name: Build iOS IPA (Unity GameCI + Xcode)
 
 on:
   workflow_dispatch:
@@ -17,112 +17,82 @@ on:
     paths:
       - 'unity-template/**'
       - 'hooks/**'
-      - 'native/**'
       - 'tools/**'
       - '.github/workflows/build-ipa.yml'
     tags:
       - 'v*'
 
 jobs:
-  build-darwin-natives:
-    name: Compile Darwin ARM64 Native Bridges
-    runs-on: macos-latest
+  export-xcode:
+    name: Unity GameCI Export Xcode Project
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      - name: Select Xcode Version
-        run: sudo xcode-select -switch /Applications/Xcode_15.4.app || true
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: unity-template/Library
+          key: Library-iOS-${{ hashFiles('unity-template/**', 'hooks/**') }}
+          restore-keys: |
+            Library-iOS-
 
-      - name: Compile Native C Bridges for Darwin
-        run: |
-          mkdir -p build/ios
-          ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-          CC=$(xcrun --sdk iphoneos --find clang)
-          AR=$(xcrun --sdk iphoneos --find ar)
-          CFLAGS="-arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 -O3 -fPIC -D__IOS__"
+      - name: Unity Builder (Export iOS Project)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          unityVersion: 2022.3.62f3
+          projectPath: unity-template
+          buildName: Lro3-Xcode
+          buildsPath: build
+          buildMethod: Ro3Ios.Editor.BuildIos.Build
+          customParameters: -ro3Out /github/workspace/build/iOS/xcode -ro3Version ${{ github.event.inputs.version || '1.0.0' }}
+          versioning: None
+          allowDirtyBuild: true
 
-          echo "Compiling fsni_darwin.c..."
-          $CC $CFLAGS -c native/fsni/fsni_darwin.c -o build/ios/fsni_darwin.o
-
-          echo "Compiling ro3_chunk.c..."
-          $CC $CFLAGS -c native/xlua/ro3_chunk.c -o build/ios/ro3_chunk.o
-
-          echo "Compiling stubs_ios.c..."
-          $CC $CFLAGS -c native/stubs/stubs_ios.c -o build/ios/stubs_ios.o
-
-          echo "Creating static archive libro3bridges.a..."
-          $AR rcs build/ios/libro3bridges.a build/ios/*.o
-          ls -lh build/ios/
-
-      - name: Upload Darwin Bridges
+      - name: Upload Xcode Project Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: darwin-bridges-arm64
-          path: build/ios/
-          retention-days: 7
+          name: xcode-project
+          path: build/iOS/xcode/
+          retention-days: 3
 
-  package-ipa:
-    name: Package IPA for Sideloading
-    needs: build-darwin-natives
+  compile-ipa:
+    name: Compile and Package IPA (macOS)
+    needs: export-xcode
     runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download Darwin Bridges
+      - name: Download Xcode Project
         uses: actions/download-artifact@v4
         with:
-          name: darwin-bridges-arm64
-          path: build/ios/
+          name: xcode-project
+          path: xcode/
 
-      - name: Assemble App Bundle Structure
+      - name: Build Xcode Project with Clang / LLVM
         run: |
-          mkdir -p Payload/ro3.app
-          cat << 'EOF' > Payload/ro3.app/Info.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleDevelopmentRegion</key>
-              <string>en</string>
-              <key>CFBundleDisplayName</key>
-              <string>Lagnarok RO3</string>
-              <key>CFBundleExecutable</key>
-              <string>ro3</string>
-              <key>CFBundleIdentifier</key>
-              <string>online.lagnarok.ro3</string>
-              <key>CFBundleInfoDictionaryVersion</key>
-              <string>6.0</string>
-              <key>CFBundleName</key>
-              <string>ro3</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${{ github.event.inputs.version || '1.0.0' }}</string>
-              <key>CFBundleVersion</key>
-              <string>1</string>
-              <key>LSRequiresIPhoneOS</key>
-              <true/>
-              <key>UIFileSharingEnabled</key>
-              <true/>
-              <key>LSSupportsOpeningDocumentsInPlace</key>
-              <true/>
-              <key>UIRequiresFullScreen</key>
-              <true/>
-              <key>NSAppTransportSecurity</key>
-              <dict>
-                  <key>NSAllowsArbitraryLoads</key>
-                  <true/>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          cd xcode
+          echo "== Building Unity-iPhone project..."
+          xcodebuild -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            archive -archivePath build/Lro3.xcarchive
 
-          # Compile native UIKit launcher executable
-          ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-          clang -arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 -fobjc-arc -framework UIKit -framework Foundation native/launcher/main.m native/stubs/stubs_ios.c -o Payload/ro3.app/ro3
-
+          echo "== Assembling Payload directory..."
+          mkdir -p ../Payload
+          cp -r build/Lro3.xcarchive/Products/Applications/*.app ../Payload/
+          cd ..
           zip -r9 Lro3-iOS.ipa Payload/
           ls -lh Lro3-iOS.ipa
 
