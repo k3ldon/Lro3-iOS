@@ -40,12 +40,17 @@ jobs:
           restore-keys: |
             Library-iOS-
 
+      - name: Prepare Unity License File
+        run: |
+          echo "${{ secrets.UNITY_LICENSE }}" > Unity_lic.ulf
+          echo "${{ secrets.UNITY_LICENSE }}" > unity-template/Unity_lic.ulf
+
       - name: Unity Builder (Export iOS Project)
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           targetPlatform: iOS
           unityVersion: 2022.3.62f3
@@ -53,7 +58,8 @@ jobs:
           buildName: Lro3-Xcode
           buildsPath: build
           buildMethod: Ro3Ios.Editor.BuildIos.Build
-          customParameters: -ro3Out /github/workspace/build/iOS/xcode -ro3Version ${{ github.event.inputs.version || '1.0.0' }}
+          skipActivation: "true"
+          customParameters: -manualLicenseFile /github/workspace/Unity_lic.ulf -ro3Out /github/workspace/build/iOS/xcode -ro3Version ${{ github.event.inputs.version || '1.0.0' }}
           versioning: None
           allowDirtyBuild: true
 
