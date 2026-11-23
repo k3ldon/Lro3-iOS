@@ -1,0 +1,5 @@
+/Ro3Ios/
+/build/
+/out/
+*.log
+.DS_Store

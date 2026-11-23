@@ -1,0 +1,142 @@
+name: Build iOS IPA (Xcode / macos-14)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'App version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+      server_url:
+        description: 'RO3Emu Server URL'
+        required: true
+        default: 'https://ro3.lagnarok.online'
+  push:
+    branches:
+      - main
+    paths:
+      - 'unity-template/**'
+      - 'hooks/**'
+      - 'native/**'
+      - 'tools/**'
+      - '.github/workflows/build-ipa.yml'
+    tags:
+      - 'v*'
+
+jobs:
+  build-darwin-natives:
+    name: Compile Darwin ARM64 Native Bridges
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app || true
+
+      - name: Compile Native C Bridges for Darwin
+        run: |
+          mkdir -p build/ios
+          ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          CC=$(xcrun --sdk iphoneos --find clang)
+          AR=$(xcrun --sdk iphoneos --find ar)
+          CFLAGS="-arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 -O3 -fPIC -D__IOS__"
+
+          echo "Compiling fsni_darwin.c..."
+          $CC $CFLAGS -c native/fsni/fsni_darwin.c -o build/ios/fsni_darwin.o
+
+          echo "Compiling ro3_chunk.c..."
+          $CC $CFLAGS -c native/xlua/ro3_chunk.c -o build/ios/ro3_chunk.o
+
+          echo "Compiling stubs_ios.c..."
+          $CC $CFLAGS -c native/stubs/stubs_ios.c -o build/ios/stubs_ios.o
+
+          echo "Creating static archive libro3bridges.a..."
+          $AR rcs build/ios/libro3bridges.a build/ios/*.o
+          ls -lh build/ios/
+
+      - name: Upload Darwin Bridges
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin-bridges-arm64
+          path: build/ios/
+          retention-days: 7
+
+  package-ipa:
+    name: Package IPA for Sideloading
+    needs: build-darwin-natives
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Darwin Bridges
+        uses: actions/download-artifact@v4
+        with:
+          name: darwin-bridges-arm64
+          path: build/ios/
+
+      - name: Assemble App Bundle Structure
+        run: |
+          mkdir -p Payload/ro3.app
+          cat << 'EOF' > Payload/ro3.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
+              <key>CFBundleDisplayName</key>
+              <string>Lagnarok RO3</string>
+              <key>CFBundleExecutable</key>
+              <string>ro3</string>
+              <key>CFBundleIdentifier</key>
+              <string>online.lagnarok.ro3</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>ro3</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${{ github.event.inputs.version || '1.0.0' }}</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UIFileSharingEnabled</key>
+              <true/>
+              <key>LSSupportsOpeningDocumentsInPlace</key>
+              <true/>
+              <key>UIRequiresFullScreen</key>
+              <true/>
+              <key>NSAppTransportSecurity</key>
+              <dict>
+                  <key>NSAllowsArbitraryLoads</key>
+                  <true/>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          # Compile lightweight launcher executable if xcode project is exported in workflow
+          ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          clang -arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 native/stubs/stubs_ios.c -o Payload/ro3.app/ro3
+
+          zip -r9 Lro3-iOS.ipa Payload/
+          ls -lh Lro3-iOS.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lro3-iOS-IPA
+          path: Lro3-iOS.ipa
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Lro3-iOS.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

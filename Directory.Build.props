@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <AnalysisLevel>none</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

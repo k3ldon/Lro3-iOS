@@ -1,0 +1,10 @@
+{
+  "name": "Ro3Ios.Editor",
+  "rootNamespace": "Ro3Ios.Editor",
+  "references": [
+    "Ro3Ios.Shell"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}
