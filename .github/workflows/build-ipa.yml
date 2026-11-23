@@ -119,9 +119,9 @@ jobs:
           </plist>
           EOF
 
-          # Compile lightweight launcher executable if xcode project is exported in workflow
+          # Compile native UIKit launcher executable
           ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-          clang -arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 native/stubs/stubs_ios.c -o Payload/ro3.app/ro3
+          clang -arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 -fobjc-arc -framework UIKit -framework Foundation native/launcher/main.m native/stubs/stubs_ios.c -o Payload/ro3.app/ro3
 
           zip -r9 Lro3-iOS.ipa Payload/
           ls -lh Lro3-iOS.ipa
