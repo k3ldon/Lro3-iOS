@@ -1,0 +1,2 @@
+repo=https://ro3.lagnarok.online/
+channel=live

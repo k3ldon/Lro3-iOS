@@ -8,7 +8,17 @@ namespace Ro3Ios.Shell
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
-            StartGame();
+            var updater = Type.GetType("Ro3Ios.Updater.UpdateScreen, Ro3Ios.Shell")
+                       ?? Type.GetType("Ro3Ios.Updater.UpdateScreen");
+            if (updater != null)
+            {
+                var screen = new GameObject("Updater").AddComponent(updater);
+                updater.GetField("OnReady")?.SetValue(screen, (Action)StartGame);
+            }
+            else
+            {
+                StartGame();
+            }
         }
 
         public static void StartGame()
