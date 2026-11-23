@@ -15,3 +15,7 @@ EXPORT int32_t GmeInit(void* config) { return 0; }
 
 EXPORT void* AVProVideoPlayer_Create(void) { return NULL; }
 EXPORT void AVProVideoPlayer_Dispose(void* player) { }
+
+int main(int argc, char *argv[]) {
+    return 0;
+}
