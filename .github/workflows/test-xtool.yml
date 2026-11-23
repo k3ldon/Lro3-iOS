@@ -13,8 +13,10 @@ jobs:
           echo "== Downloading xtool for macOS..."
           curl -fL "https://github.com/xtool-org/xtool/releases/latest/download/xtool.app.zip" -o xtool.zip
           unzip -q xtool.zip
-          sudo mv xtool.app/Contents/MacOS/xtool /usr/local/bin/xtool || sudo mv xtool /usr/local/bin/xtool || true
-          chmod +x /usr/local/bin/xtool || true
+          sudo xattr -dr com.apple.quarantine xtool.app || true
+          sudo mv xtool.app/Contents/MacOS/xtool /usr/local/bin/xtool || true
+          sudo codesign --force --deep --sign - /usr/local/bin/xtool || true
+          sudo chmod +x /usr/local/bin/xtool || true
 
       - name: Verify xtool Installation
         run: |
