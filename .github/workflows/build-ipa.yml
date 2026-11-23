@@ -41,9 +41,11 @@ jobs:
             Library-iOS-
 
       - name: Prepare Unity License File
+        env:
+          UNITY_LICENSE_DATA: ${{ secrets.UNITY_LICENSE }}
         run: |
-          echo "${{ secrets.UNITY_LICENSE }}" > Unity_lic.ulf
-          echo "${{ secrets.UNITY_LICENSE }}" > unity-template/Unity_lic.ulf
+          python3 -c "import os; open('Unity_lic.ulf', 'w', encoding='utf-8').write(os.environ['UNITY_LICENSE_DATA'])"
+          head -n 3 Unity_lic.ulf
 
       - name: Unity Builder (Export iOS Project)
         uses: game-ci/unity-builder@v4
