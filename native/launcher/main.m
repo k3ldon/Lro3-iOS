@@ -413,7 +413,8 @@ static UnityFramework* UnityFrameworkLoad(void) {
         }
         if (self.ufw) {
             if (![self.ufw appController]) {
-                [self.ufw setDataBundleId:"com.unity3d.framework"];
+                // Data/ lives in the main app bundle; do NOT call setDataBundleId
+                // (a wrong bundle id makes Unity exit(0) during early init)
                 [self.ufw runEmbeddedWithArgc:g_argc argv:g_argv appLaunchOpts:nil];
             }
             NSLog(@"[Ro3Ios] Showing Unity Window...");
