@@ -1,4 +1,4 @@
-name: Compile iOS IPA (macOS Xcode Build)
+name: Compile iOS IPA (Unity GameCI + Xcode)
 
 permissions:
   contents: write
@@ -12,21 +12,60 @@ on:
         default: '1.0.0'
 
 jobs:
+  export-xcode:
+    name: Unity GameCI Export Xcode Project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: unity-template/Library
+          key: Library-iOS-${{ hashFiles('unity-template/**') }}
+          restore-keys: |
+            Library-iOS-
+
+      - name: Unity Builder (Export iOS Project)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          unityVersion: 2022.3.62f3
+          projectPath: unity-template
+          buildName: Lro3-Xcode
+          buildsPath: build
+          buildMethod: Ro3Ios.Editor.BuildIos.Build
+          customParameters: -ro3Out /github/workspace/build/iOS/xcode -ro3Version ${{ github.event.inputs.version || '1.0.0' }}
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Upload Xcode Project Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-project
+          path: build/iOS/xcode/
+          retention-days: 3
+
   build-ipa:
-    name: Build Unity iOS Binary with Xcode
+    name: Build IPA with Xcode
+    needs: export-xcode
     runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Download Exported Xcode Project
-        run: |
-          echo "== Downloading exported Xcode project from release..."
-          gh release download v1.0.0-xcode -p "xcode-project.tar.gz" -R k3ldon/Lro3-iOS
-          tar -xzf xcode-project.tar.gz
-          ls -la xcode/
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/download-artifact@v4
+        with:
+          name: xcode-project
+          path: xcode/
 
       - name: Build Xcode Archive with Clang / LLVM
         run: |
@@ -90,12 +129,3 @@ jobs:
           name: Lro3-iOS-IPA
           path: Lro3-iOS.ipa
           retention-days: 14
-
-      - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.0-ipa
-          name: "Lagnarok RO3 iOS Client v1.0.0"
-          files: Lro3-iOS.ipa
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
