@@ -19,6 +19,24 @@ namespace Ro3Ios.Updater
 
         volatile View _view = View.Checking;
         volatile string _message = "Buscando actualizaciones…", _error = "";
+
+        // On-screen diagnostics: iOS redacts Debug.Log in syslog, so the updater narrates itself here.
+        static readonly object _traceLock = new object();
+        static readonly List<string> _traceLines = new List<string>(16);
+        static System.Diagnostics.Stopwatch _traceClock;
+        public static void Trace(string message)
+        {
+            lock (_traceLock)
+            {
+                _traceClock = _traceClock ?? System.Diagnostics.Stopwatch.StartNew();
+                _traceLines.Add(_traceClock.Elapsed.TotalSeconds.ToString("0.0") + "s " + message);
+                while (_traceLines.Count > 14) _traceLines.RemoveAt(0);
+            }
+        }
+        public static string TraceText()
+        {
+            lock (_traceLock) { return string.Join("\n", _traceLines); }
+        }
         string _repoUrl, _channelName, _publicKey, _root, _appVersion;
         bool _offlinePlayable, _wifi;
         Installer _installer;
@@ -83,8 +101,10 @@ namespace Ro3Ios.Updater
         {
             _view = View.Checking;
             _message = "Buscando actualizaciones…";
+            Trace("begin: repo=" + _repoUrl + " channel=" + _channelName);
             _offlinePlayable = _installer.IsComplete() && _installer.QuickVerify().Count == 0;
             _wifi = Application.internetReachability == NetworkReachability.ReachableViaLocalAreaNetwork;
+            Trace("local state: complete=" + _installer.IsComplete() + " wifi=" + _wifi);
             _free = MobilePlatform.FreeSpace(_root);
             _installer.FreeSpace = _ => _free;
             bool verifyAll = _verifyAll;
@@ -94,15 +114,18 @@ namespace Ro3Ios.Updater
 
         async Task RunAsync(bool verifyAll)
         {
+            Trace("run: requesting channel");
             try
             {
                 try
                 {
                     _channel = await _repo.GetChannelAsync(_channelName, _cts.Token);
+                    Trace("channel ok: " + _channel.Version);
                 }
                 catch (Exception e) when (!(e is UpdateException))
                 {
                     Debug.LogWarning("[Ro3Ios] updater: channel: " + e);
+                    Trace("channel FAILED: " + e.GetType().Name + ": " + e.Message);
                     Fail("No se pudo conectar con el servidor de actualizaciones. Revisa tu conexión a Internet.");
                     return;
                 }
@@ -121,7 +144,9 @@ namespace Ro3Ios.Updater
                 }
 
                 _message = "Comprobando archivos del juego…";
+                Trace("preparing plan (manifest " + _channel.Manifest + ")");
                 _plan = await _installer.PrepareAsync(_channel, verifyAll, _cts.Token);
+                Trace("plan ready: " + _plan.Install.Count + " files, " + _plan.DownloadBytes + " bytes");
 
                 if (_plan.DownloadBytes > 0 && (!_wifi || _plan.DownloadBytes > (500L << 20)))
                 {
@@ -131,7 +156,9 @@ namespace Ro3Ios.Updater
                 }
 
                 _view = View.Working;
+                Trace("applying plan");
                 await _installer.ApplyAsync(_plan, _cts.Token);
+                Trace("apply done");
                 _view = View.Done;
             }
             catch (OperationCanceledException) { }
@@ -139,6 +166,7 @@ namespace Ro3Ios.Updater
             catch (Exception e)
             {
                 Debug.LogError("[Ro3Ios] updater error: " + e);
+                Trace("run FAILED: " + e.GetType().Name + ": " + e.Message);
                 Fail("La actualización falló: " + e.Message);
             }
         }
@@ -286,6 +314,7 @@ namespace Ro3Ios.Updater
                 case View.Checking:
                     Line(ref y, x, w, scale, _message, _text);
                     if (_installer.Status.Stage == Stage.Scanning) Progress(ref y, x, w, scale);
+                    Line(ref y, x, w, scale, TraceText(), _small);
                     break;
                 case View.Confirm:
                     Line(ref y, x, w, scale, $"Es necesario descargar {Installer.Format(_plan.DownloadBytes)} ({_plan.Install.Count} archivos).", _text);

@@ -64,13 +64,27 @@ namespace Ro3Ios.Updater
 
         async Task<(int, byte[])> GetAsync(Uri uri, CancellationToken ct)
         {
-            if (_raw != null)
+            UpdateScreen.Trace("http GET " + uri.AbsoluteUri);
+            try
             {
-                var r = await _raw.GetAsync(uri, ct).ConfigureAwait(false);
-                return (r.Status, r.Body);
+                if (_raw != null)
+                {
+                    var r = await _raw.GetAsync(uri, ct).ConfigureAwait(false);
+                    UpdateScreen.Trace("http <- " + r.Status + " (" + r.Body.Length + " B)");
+                    return (r.Status, r.Body);
+                }
+                using (var response = await _http.GetAsync(uri, ct).ConfigureAwait(false))
+                {
+                    var body = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                    UpdateScreen.Trace("http <- " + (int)response.StatusCode + " (" + body.Length + " B)");
+                    return ((int)response.StatusCode, body);
+                }
             }
-            using (var response = await _http.GetAsync(uri, ct).ConfigureAwait(false))
-                return ((int)response.StatusCode, await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false));
+            catch (Exception e)
+            {
+                UpdateScreen.Trace("http ERROR " + e.GetType().Name + ": " + e.Message);
+                throw;
+            }
         }
 
         public void Dispose()
