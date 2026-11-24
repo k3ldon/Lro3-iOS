@@ -91,21 +91,11 @@ static UnityFramework* UnityFrameworkLoad(void) {
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     NSLog(@"[Ro3Ios] Booting application lifecycle...");
 
-    // 1. Initialize UnityFramework in-lifecycle during app launch (UaaL pattern)
-    @try {
-        self.ufw = UnityFrameworkLoad();
-        if (self.ufw) {
-            NSLog(@"[Ro3Ios] UnityFramework loaded successfully: %@", self.ufw);
-            [self.ufw setDataBundleId:"com.unity3d.framework"];
-            [self.ufw runEmbeddedWithArgc:g_argc argv:g_argv appLaunchOpts:launchOptions];
-        } else {
-            NSLog(@"[Ro3Ios] UnityFramework bundle not found; running standalone launcher");
-        }
-    } @catch (NSException *ex) {
-        NSLog(@"[Ro3Ios] Exception initializing UnityFramework: %@", ex);
-    }
+    // Unity init is deferred to handlePlayTapped: initializing UnityFramework
+    // inside didFinishLaunching caused an immediate voluntary process exit
+    // (no crash report, no app logs). Lazy init keeps the launcher stable.
 
-    // 2. Setup our custom Concept 1 Launcher UI Window on top
+    // 1. Setup our custom Concept 1 Launcher UI Window on top
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor colorWithRed:15/255.0 green:23/255.0 blue:42/255.0 alpha:1.0];
 
@@ -417,7 +407,15 @@ static UnityFramework* UnityFrameworkLoad(void) {
     self.playButton.backgroundColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
 
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.ufw) {
+            NSLog(@"[Ro3Ios] Loading UnityFramework lazily...");
+            self.ufw = UnityFrameworkLoad();
+        }
         if (self.ufw) {
+            if (![self.ufw appController]) {
+                [self.ufw setDataBundleId:"com.unity3d.framework"];
+                [self.ufw runEmbeddedWithArgc:g_argc argv:g_argv appLaunchOpts:nil];
+            }
             NSLog(@"[Ro3Ios] Showing Unity Window...");
             [self.ufw showUnityWindow];
 
