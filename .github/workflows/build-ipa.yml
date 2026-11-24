@@ -30,6 +30,25 @@ jobs:
           cd xcode
           mkdir -p Il2CppOutputProject/Source/il2cppOutput
           [ -f Il2CppOutputProject/Source/il2cppOutput/dummy.cpp ] || echo "// IL2CPP dummy" > Il2CppOutputProject/Source/il2cppOutput/dummy.cpp
+
+          echo "== Creating PrivacyInfo.xcprivacy..."
+          mkdir -p UnityFramework
+          cat << 'EOF' > UnityFramework/PrivacyInfo.xcprivacy
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>NSPrivacyTracking</key>
+              <false/>
+              <key>NSPrivacyCollectedDataTypes</key>
+              <array/>
+              <key>NSPrivacyAccessedAPITypes</key>
+              <array/>
+          </dict>
+          </plist>
+          EOF
+          cp UnityFramework/PrivacyInfo.xcprivacy .
+
           echo "== Compiling Unity-iPhone with xcodebuild..."
           xcodebuild -project Unity-iPhone.xcodeproj \
             -scheme Unity-iPhone \
