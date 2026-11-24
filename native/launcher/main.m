@@ -16,6 +16,11 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
 
 @interface UnityAppController : NSObject<UIApplicationDelegate>
 @property (strong, nonatomic) UIWindow *window;
+- (void)applicationWillResignActive:(UIApplication *)application;
+- (void)applicationDidEnterBackground:(UIApplication *)application;
+- (void)applicationWillEnterForeground:(UIApplication *)application;
+- (void)applicationDidBecomeActive:(UIApplication *)application;
+- (void)applicationWillTerminate:(UIApplication *)application;
 @end
 
 @interface UnityFramework : NSObject
@@ -29,7 +34,6 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
 
 static int g_argc = 0;
 static char **g_argv = NULL;
-static NSDictionary *g_launchOptions = nil;
 
 static UnityFramework* UnityFrameworkLoad(void) {
     NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
@@ -61,6 +65,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
 
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
 @property (strong, nonatomic) UIWindow *window;
+@property (strong, nonatomic) UnityFramework *ufw;
 @property (strong, nonatomic) UILabel *serverStatusLabel;
 @property (strong, nonatomic) UILabel *statusStageLabel;
 @property (strong, nonatomic) UILabel *statusPctLabel;
@@ -84,8 +89,23 @@ static UnityFramework* UnityFrameworkLoad(void) {
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    g_launchOptions = launchOptions;
+    NSLog(@"[Ro3Ios] Booting application lifecycle...");
 
+    // 1. Initialize UnityFramework in-lifecycle during app launch (UaaL pattern)
+    @try {
+        self.ufw = UnityFrameworkLoad();
+        if (self.ufw) {
+            NSLog(@"[Ro3Ios] UnityFramework loaded successfully: %@", self.ufw);
+            [self.ufw setDataBundleId:"com.unity3d.framework"];
+            [self.ufw runEmbeddedWithArgc:g_argc argv:g_argv appLaunchOpts:launchOptions];
+        } else {
+            NSLog(@"[Ro3Ios] UnityFramework bundle not found; running standalone launcher");
+        }
+    } @catch (NSException *ex) {
+        NSLog(@"[Ro3Ios] Exception initializing UnityFramework: %@", ex);
+    }
+
+    // 2. Setup our custom Concept 1 Launcher UI Window on top
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor colorWithRed:15/255.0 green:23/255.0 blue:42/255.0 alpha:1.0];
 
@@ -102,7 +122,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
     CGFloat screenWidth = self.window.bounds.size.width;
     CGFloat screenHeight = self.window.bounds.size.height;
 
-    // 1. Background Image
+    // Background Image
     UIImageView *bgImageView = [[UIImageView alloc] initWithFrame:self.window.bounds];
     bgImageView.contentMode = UIViewContentModeScaleAspectFill;
     bgImageView.clipsToBounds = YES;
@@ -129,7 +149,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
 
     CGFloat topMargin = 58.0;
 
-    // 2. Top Glass Bar
+    // Top Glass Bar
     UIVisualEffectView *topBar = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
     topBar.frame = CGRectMake(18, topMargin, screenWidth - 36, 44);
     topBar.layer.cornerRadius = 16;
@@ -172,7 +192,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
     [self.langButton addTarget:self action:@selector(handleLangTapped) forControlEvents:UIControlEventTouchUpInside];
     [topBar.contentView addSubview:self.langButton];
 
-    // 3. Hero Logo Area
+    // Hero Logo Area
     CGFloat logoTop = 104.0;
     CGFloat logoHeight = 126.0;
     UIImageView *logoView = [[UIImageView alloc] initWithFrame:CGRectMake((screenWidth - 260) / 2.0, logoTop, 260, logoHeight)];
@@ -189,7 +209,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
     logoView.layer.shadowOpacity = 0.4;
     [vc.view addSubview:logoView];
 
-    // 4. Central Notices Glass Card
+    // Central Notices Glass Card
     CGFloat cardTop = 236.0;
     CGFloat cardHeight = 230.0;
     UIVisualEffectView *newsCard = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
@@ -269,7 +289,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
         itemY += 54.0;
     }
 
-    // 5. Floating Bottom Dock
+    // Floating Bottom Dock
     CGFloat bottomMargin = 34.0;
     CGFloat dockHeight = 175.0;
     UIVisualEffectView *dockView = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
@@ -318,7 +338,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
     [dockView.contentView addSubview:self.statsBytesLabel];
 
     self.statsRateLabel = [[UILabel alloc] initWithFrame:CGRectMake(dockView.bounds.size.width - 180, 62, 160, 18)];
-    self.statsRateLabel.text = @"Recursos verificados";
+    self.statsRateLabel.text = @"Recursos listos";
     self.statsRateLabel.textAlignment = NSTextAlignmentRight;
     self.statsRateLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
     self.statsRateLabel.textColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
@@ -387,44 +407,60 @@ static UnityFramework* UnityFrameworkLoad(void) {
 
 - (void)handlePlayTapped {
     [self.hapticFeedback impactOccurred];
-    [self launchUnityGame];
-}
 
-- (void)launchUnityGame {
-    NSLog(@"[Ro3Ios] Launching Unity Framework into foreground...");
-
+    NSLog(@"[Ro3Ios] Tapped JUGAR! Handing over to UnityFramework window...");
     UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
     [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
 
     self.statusStageLabel.text = @"✦ Iniciando motor gráfico Metal…";
-    [self.playButton setTitle:@"⚔️  CARGANDO MIDGARD…" forState:UIControlStateNormal];
+    [self.playButton setTitle:@"⚔️  INICIANDO MIDGARD…" forState:UIControlStateNormal];
     self.playButton.backgroundColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        UnityFramework *ufw = UnityFrameworkLoad();
-        if (ufw) {
-            NSLog(@"[Ro3Ios] UnityFramework acquired: %@", ufw);
-            [ufw setDataBundleId:"com.unity3d.framework"];
-            if (![ufw appController]) {
-                NSLog(@"[Ro3Ios] Calling runEmbeddedWithArgc...");
-                [ufw runEmbeddedWithArgc:g_argc argv:g_argv appLaunchOpts:g_launchOptions];
-            }
-            NSLog(@"[Ro3Ios] Calling showUnityWindow...");
-            [ufw showUnityWindow];
+        if (self.ufw) {
+            NSLog(@"[Ro3Ios] Showing Unity Window...");
+            [self.ufw showUnityWindow];
 
-            UnityAppController *controller = [ufw appController];
+            UnityAppController *controller = [self.ufw appController];
             if (controller && controller.window) {
                 [controller.window makeKeyAndVisible];
             }
         } else {
-            NSLog(@"[Ro3Ios] ERROR: UnityFramework is nil");
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Motor de Juego"
-                                                                           message:@"Iniciando conexión con el servidor de juego...\nSi es la primera vez, el motor descargará los paquetes delta restantes."
-                                                                    preferredStyle:UIAlertControllerStyleAlert];
-            [alert addAction:[UIAlertAction actionWithTitle:@"Entendido" style:UIAlertActionStyleDefault handler:nil]];
-            [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+            NSLog(@"[Ro3Ios] UnityFramework is nil; attempting fallback load");
+            self.ufw = UnityFrameworkLoad();
+            if (self.ufw) {
+                [self.ufw showUnityWindow];
+            } else {
+                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Motor de Juego"
+                                                                               message:@"Iniciando conexión con el servidor de juego...\nLos recursos del mundo de Midgard están listos."
+                                                                        preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"Entendido" style:UIAlertActionStyleDefault handler:nil]];
+                [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+            }
         }
     });
+}
+
+#pragma mark - Forwarding Lifecycle Events to UnityAppController
+
+- (void)applicationWillResignActive:(UIApplication *)application {
+    [[self.ufw appController] applicationWillResignActive:application];
+}
+
+- (void)applicationDidEnterBackground:(UIApplication *)application {
+    [[self.ufw appController] applicationDidEnterBackground:application];
+}
+
+- (void)applicationWillEnterForeground:(UIApplication *)application {
+    [[self.ufw appController] applicationWillEnterForeground:application];
+}
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    [[self.ufw appController] applicationDidBecomeActive:application];
+}
+
+- (void)applicationWillTerminate:(UIApplication *)application {
+    [[self.ufw appController] applicationWillTerminate:application];
 }
 
 #pragma mark - Button Actions
