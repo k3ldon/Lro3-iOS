@@ -35,7 +35,8 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}        with:
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
           targetPlatform: iOS
           unityVersion: 2022.3.62f3
           projectPath: unity-template
