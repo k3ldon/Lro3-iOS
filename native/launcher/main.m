@@ -50,13 +50,7 @@
     bgGradient.locations = @[@0.0, @0.45, @1.0];
     [vc.view.layer addSublayer:bgGradient];
 
-    CGFloat topMargin = 56.0;
-    if (@available(iOS 11.0, *)) {
-        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-        if (keyWindow && keyWindow.safeAreaInsets.top > 0) {
-            topMargin = keyWindow.safeAreaInsets.top + 6.0;
-        }
-    }
+    CGFloat topMargin = 58.0;
 
     // 2. Top Glass Bar
     UIVisualEffectView *topBar = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
