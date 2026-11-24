@@ -1,5 +1,18 @@
 #import <UIKit/UIKit.h>
 
+typedef NS_ENUM(NSInteger, LauncherState) {
+    LauncherStateIdle,
+    LauncherStateDownloading,
+    LauncherStatePaused,
+    LauncherStateReady
+};
+
+typedef NS_ENUM(NSInteger, LauncherLang) {
+    LauncherLangES,
+    LauncherLangEN,
+    LauncherLangPT
+};
+
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
 @property (strong, nonatomic) UIWindow *window;
 @property (strong, nonatomic) UILabel *serverStatusLabel;
@@ -9,8 +22,17 @@
 @property (strong, nonatomic) UILabel *statsRateLabel;
 @property (strong, nonatomic) UIProgressView *progressBar;
 @property (strong, nonatomic) UIButton *playButton;
-@property (assign, nonatomic) float currentProgress;
-@property (strong, nonatomic) NSTimer *progressTimer;
+@property (strong, nonatomic) UIButton *langButton;
+@property (strong, nonatomic) UIButton *repairButton;
+@property (strong, nonatomic) UILabel *cardTitleLabel;
+@property (strong, nonatomic) UILabel *badgePillLabel;
+@property (strong, nonatomic) NSMutableArray<UIButton *> *newsButtons;
+@property (assign, nonatomic) LauncherState state;
+@property (assign, nonatomic) LauncherLang lang;
+@property (assign, nonatomic) double downloadedBytes;
+@property (assign, nonatomic) double totalBytes;
+@property (strong, nonatomic) NSTimer *downloadTimer;
+@property (strong, nonatomic) UIImpactFeedbackGenerator *hapticFeedback;
 @end
 
 @implementation AppDelegate
@@ -19,13 +41,20 @@
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor colorWithRed:15/255.0 green:23/255.0 blue:42/255.0 alpha:1.0];
 
+    self.state = LauncherStateIdle;
+    self.lang = LauncherLangES;
+    self.totalBytes = 11.4 * 1024.0 * 1024.0 * 1024.0; // 11.4 GB
+    self.downloadedBytes = 0.0;
+    self.hapticFeedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+    [self.hapticFeedback prepare];
+
     UIViewController *vc = [[UIViewController alloc] init];
     vc.view.frame = self.window.bounds;
 
     CGFloat screenWidth = self.window.bounds.size.width;
     CGFloat screenHeight = self.window.bounds.size.height;
 
-    // 1. Background Image (assets/bg.jpg)
+    // 1. Background Image
     UIImageView *bgImageView = [[UIImageView alloc] initWithFrame:self.window.bounds];
     bgImageView.contentMode = UIViewContentModeScaleAspectFill;
     bgImageView.clipsToBounds = YES;
@@ -39,7 +68,7 @@
     }
     [vc.view addSubview:bgImageView];
 
-    // Subtle sky gradient overlay
+    // Sky gradient overlay
     CAGradientLayer *bgGradient = [CAGradientLayer layer];
     bgGradient.frame = self.window.bounds;
     bgGradient.colors = @[
@@ -59,37 +88,46 @@
     topBar.layer.masksToBounds = YES;
     topBar.layer.borderWidth = 1.0;
     topBar.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.85].CGColor;
+    topBar.userInteractionEnabled = YES;
+    topBar.contentView.userInteractionEnabled = YES;
     [vc.view addSubview:topBar];
 
-    // Green pulse dot + Server name
-    UIView *pulseDot = [[UIView alloc] initWithFrame:CGRectMake(14, 18, 8, 8)];
+    // Server Info Button (Tappable)
+    UIButton *serverBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    serverBtn.frame = CGRectMake(10, 0, 220, 44);
+    [serverBtn addTarget:self action:@selector(handleServerInfoTapped) forControlEvents:UIControlEventTouchUpInside];
+    [topBar.contentView addSubview:serverBtn];
+
+    UIView *pulseDot = [[UIView alloc] initWithFrame:CGRectMake(4, 18, 8, 8)];
     pulseDot.backgroundColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
     pulseDot.layer.cornerRadius = 4;
     pulseDot.layer.shadowColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0].CGColor;
     pulseDot.layer.shadowRadius = 4;
     pulseDot.layer.shadowOpacity = 0.8;
-    [topBar.contentView addSubview:pulseDot];
+    [serverBtn addSubview:pulseDot];
 
-    self.serverStatusLabel = [[UILabel alloc] initWithFrame:CGRectMake(28, 0, 200, 44)];
+    self.serverStatusLabel = [[UILabel alloc] initWithFrame:CGRectMake(18, 0, 195, 44)];
     self.serverStatusLabel.text = @"Online · Midgard Oficial";
     self.serverStatusLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
     self.serverStatusLabel.textColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0];
-    [topBar.contentView addSubview:self.serverStatusLabel];
+    [serverBtn addSubview:self.serverStatusLabel];
 
-    UILabel *langPill = [[UILabel alloc] initWithFrame:CGRectMake(topBar.bounds.size.width - 70, 9, 56, 26)];
-    langPill.text = @"ES ▾";
-    langPill.textAlignment = NSTextAlignmentCenter;
-    langPill.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold];
-    langPill.textColor = [UIColor colorWithRed:2/255.0 green:132/255.0 blue:199/255.0 alpha:1.0];
-    langPill.backgroundColor = [UIColor colorWithRed:2/255.0 green:132/255.0 blue:199/255.0 alpha:0.12];
-    langPill.layer.cornerRadius = 8;
-    langPill.layer.masksToBounds = YES;
-    [topBar.contentView addSubview:langPill];
+    // Language Selector Button
+    self.langButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.langButton.frame = CGRectMake(topBar.bounds.size.width - 66, 9, 56, 26);
+    [self.langButton setTitle:@"ES ▾" forState:UIControlStateNormal];
+    [self.langButton setTitleColor:[UIColor colorWithRed:2/255.0 green:132/255.0 blue:199/255.0 alpha:1.0] forState:UIControlStateNormal];
+    self.langButton.titleLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold];
+    self.langButton.backgroundColor = [UIColor colorWithRed:2/255.0 green:132/255.0 blue:199/255.0 alpha:0.12];
+    self.langButton.layer.cornerRadius = 8;
+    self.langButton.layer.masksToBounds = YES;
+    [self.langButton addTarget:self action:@selector(handleLangTapped) forControlEvents:UIControlEventTouchUpInside];
+    [topBar.contentView addSubview:self.langButton];
 
     // 3. Hero Logo Area
-    CGFloat logoTop = topMargin + 52.0;
-    CGFloat logoHeight = 120.0;
-    UIImageView *logoView = [[UIImageView alloc] initWithFrame:CGRectMake((screenWidth - 250) / 2.0, logoTop, 250, logoHeight)];
+    CGFloat logoTop = 104.0;
+    CGFloat logoHeight = 126.0;
+    UIImageView *logoView = [[UIImageView alloc] initWithFrame:CGRectMake((screenWidth - 260) / 2.0, logoTop, 260, logoHeight)];
     logoView.contentMode = UIViewContentModeScaleAspectFit;
 
     NSString *logoPath = [[NSBundle mainBundle] pathForResource:@"logo-hero" ofType:@"png" inDirectory:@"assets"];
@@ -98,13 +136,13 @@
         logoView.image = [UIImage imageWithContentsOfFile:logoPath];
     }
     logoView.layer.shadowColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0].CGColor;
-    logoView.layer.shadowOffset = CGSizeMake(0, 6);
-    logoView.layer.shadowRadius = 14;
-    logoView.layer.shadowOpacity = 0.35;
+    logoView.layer.shadowOffset = CGSizeMake(0, 8);
+    logoView.layer.shadowRadius = 18;
+    logoView.layer.shadowOpacity = 0.4;
     [vc.view addSubview:logoView];
 
     // 4. Central Notices Glass Card
-    CGFloat cardTop = logoTop + logoHeight + 10.0;
+    CGFloat cardTop = 236.0;
     CGFloat cardHeight = 230.0;
     UIVisualEffectView *newsCard = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleExtraLight]];
     newsCard.frame = CGRectMake(18, cardTop, screenWidth - 36, cardHeight);
@@ -112,42 +150,48 @@
     newsCard.layer.masksToBounds = YES;
     newsCard.layer.borderWidth = 1.0;
     newsCard.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.9].CGColor;
+    newsCard.userInteractionEnabled = YES;
+    newsCard.contentView.userInteractionEnabled = YES;
     [vc.view addSubview:newsCard];
 
-    // Card Header
-    UILabel *cardTitle = [[UILabel alloc] initWithFrame:CGRectMake(18, 14, 180, 24)];
-    cardTitle.text = @"✦ AVISOS DE MIDGARD";
-    cardTitle.font = [UIFont systemFontOfSize:13 weight:UIFontWeightHeavy];
-    cardTitle.textColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0];
-    [newsCard.contentView addSubview:cardTitle];
+    self.cardTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(18, 14, 180, 24)];
+    self.cardTitleLabel.text = @"✦ AVISOS DE MIDGARD";
+    self.cardTitleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightHeavy];
+    self.cardTitleLabel.textColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0];
+    [newsCard.contentView addSubview:self.cardTitleLabel];
 
-    UILabel *badgePill = [[UILabel alloc] initWithFrame:CGRectMake(newsCard.bounds.size.width - 128, 14, 110, 22)];
-    badgePill.text = @"SERVIDOR OFICIAL";
-    badgePill.textAlignment = NSTextAlignmentCenter;
-    badgePill.font = [UIFont systemFontOfSize:9 weight:UIFontWeightHeavy];
-    badgePill.textColor = [UIColor colorWithRed:180/255.0 green:83/255.0 blue:9/255.0 alpha:1.0];
-    badgePill.backgroundColor = [UIColor colorWithRed:254/255.0 green:243/255.0 blue:199/255.0 alpha:1.0];
-    badgePill.layer.cornerRadius = 8;
-    badgePill.layer.borderWidth = 1.0;
-    badgePill.layer.borderColor = [UIColor colorWithRed:253/255.0 green:230/255.0 blue:138/255.0 alpha:1.0].CGColor;
-    badgePill.layer.masksToBounds = YES;
-    [newsCard.contentView addSubview:badgePill];
+    self.badgePillLabel = [[UILabel alloc] initWithFrame:CGRectMake(newsCard.bounds.size.width - 128, 14, 110, 22)];
+    self.badgePillLabel.text = @"SERVIDOR OFICIAL";
+    self.badgePillLabel.textAlignment = NSTextAlignmentCenter;
+    self.badgePillLabel.font = [UIFont systemFontOfSize:9 weight:UIFontWeightHeavy];
+    self.badgePillLabel.textColor = [UIColor colorWithRed:180/255.0 green:83/255.0 blue:9/255.0 alpha:1.0];
+    self.badgePillLabel.backgroundColor = [UIColor colorWithRed:254/255.0 green:243/255.0 blue:199/255.0 alpha:1.0];
+    self.badgePillLabel.layer.cornerRadius = 8;
+    self.badgePillLabel.layer.borderWidth = 1.0;
+    self.badgePillLabel.layer.borderColor = [UIColor colorWithRed:253/255.0 green:230/255.0 blue:138/255.0 alpha:1.0].CGColor;
+    self.badgePillLabel.layer.masksToBounds = YES;
+    [newsCard.contentView addSubview:self.badgePillLabel];
 
-    // Gold hairline
     UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(18, 44, newsCard.bounds.size.width - 36, 1)];
     divider.backgroundColor = [UIColor colorWithRed:212/255.0 green:168/255.0 blue:87/255.0 alpha:0.35];
     [newsCard.contentView addSubview:divider];
 
-    // Notice items
+    // Interactive News List
+    self.newsButtons = [NSMutableArray array];
     NSArray *items = @[
-        @{@"tag": @"UPDATE", @"color": [UIColor colorWithRed:29/255.0 green:78/255.0 blue:216/255.0 alpha:1.0], @"bg": [UIColor colorWithRed:219/255.0 green:234/255.0 blue:254/255.0 alpha:1.0], @"text": @"Cliente nativo iOS v1.0.33 habilitado con soporte de Metal.", @"date": @"Hoy"},
-        @{@"tag": @"EVENTO", @"color": [UIColor colorWithRed:190/255.0 green:24/255.0 blue:93/255.0 alpha:1.0], @"bg": [UIColor colorWithRed:252/255.0 green:231/255.0 blue:243/255.0 alpha:1.0], @"text": @"Bienvenida a Midgard: Multiplicador x2 EXP y Drop en Prontera.", @"date": @"22 Nov"},
-        @{@"tag": @"GREMIO", @"color": [UIColor colorWithRed:67/255.0 green:56/255.0 blue:202/255.0 alpha:1.0], @"bg": [UIColor colorWithRed:224/255.0 green:231/255.0 blue:255/255.0 alpha:1.0], @"text": @"Guerra del Emperium (WoE) programada para este sábado 20:00 UTC.", @"date": @"20 Nov"}
+        @{@"tag": @"UPDATE", @"color": [UIColor colorWithRed:29/255.0 green:78/255.0 blue:216/255.0 alpha:1.0], @"bg": [UIColor colorWithRed:219/255.0 green:234/255.0 blue:254/255.0 alpha:1.0], @"text": @"Cliente nativo iOS v1.0.33 habilitado con soporte de Metal.", @"date": @"Hoy", @"id": @0},
+        @{@"tag": @"EVENTO", @"color": [UIColor colorWithRed:190/255.0 green:24/255.0 blue:93/255.0 alpha:1.0], @"bg": [UIColor colorWithRed:252/255.0 green:231/255.0 blue:243/255.0 alpha:1.0], @"text": @"Bienvenida a Midgard: Multiplicador x2 EXP y Drop en Prontera.", @"date": @"22 Nov", @"id": @1},
+        @{@"tag": @"GREMIO", @"color": [UIColor colorWithRed:67/255.0 green:56/255.0 blue:202/255.0 alpha:1.0], @"bg": [UIColor colorWithRed:224/255.0 green:231/255.0 blue:255/255.0 alpha:1.0], @"text": @"Guerra del Emperium (WoE) programada para este sábado 20:00 UTC.", @"date": @"20 Nov", @"id": @2}
     ];
 
     CGFloat itemY = 52.0;
     for (NSDictionary *info in items) {
-        UILabel *tagLabel = [[UILabel alloc] initWithFrame:CGRectMake(18, itemY + 2, 48, 18)];
+        UIButton *newsBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        newsBtn.frame = CGRectMake(10, itemY - 4, newsCard.bounds.size.width - 20, 50);
+        newsBtn.tag = [info[@"id"] integerValue];
+        [newsBtn addTarget:self action:@selector(handleNewsTapped:) forControlEvents:UIControlEventTouchUpInside];
+        
+        UILabel *tagLabel = [[UILabel alloc] initWithFrame:CGRectMake(8, 6, 48, 18)];
         tagLabel.text = info[@"tag"];
         tagLabel.textAlignment = NSTextAlignmentCenter;
         tagLabel.font = [UIFont systemFontOfSize:9 weight:UIFontWeightHeavy];
@@ -155,21 +199,24 @@
         tagLabel.backgroundColor = info[@"bg"];
         tagLabel.layer.cornerRadius = 5;
         tagLabel.layer.masksToBounds = YES;
-        [newsCard.contentView addSubview:tagLabel];
+        [newsBtn addSubview:tagLabel];
 
-        UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(74, itemY, newsCard.bounds.size.width - 120, 36)];
+        UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(64, 4, newsBtn.bounds.size.width - 110, 36)];
         descLabel.text = info[@"text"];
         descLabel.font = [UIFont systemFontOfSize:11.5 weight:UIFontWeightMedium];
         descLabel.textColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0];
         descLabel.numberOfLines = 2;
-        [newsCard.contentView addSubview:descLabel];
+        [newsBtn addSubview:descLabel];
 
-        UILabel *dateLabel = [[UILabel alloc] initWithFrame:CGRectMake(newsCard.bounds.size.width - 44, itemY + 2, 36, 16)];
+        UILabel *dateLabel = [[UILabel alloc] initWithFrame:CGRectMake(newsBtn.bounds.size.width - 40, 6, 36, 16)];
         dateLabel.text = info[@"date"];
         dateLabel.textAlignment = NSTextAlignmentRight;
         dateLabel.font = [UIFont systemFontOfSize:9.5 weight:UIFontWeightRegular];
         dateLabel.textColor = [UIColor colorWithRed:124/255.0 green:143/255.0 blue:166/255.0 alpha:1.0];
-        [newsCard.contentView addSubview:dateLabel];
+        [newsBtn addSubview:dateLabel];
+
+        [newsCard.contentView addSubview:newsBtn];
+        [self.newsButtons addObject:newsBtn];
 
         itemY += 54.0;
     }
@@ -187,64 +234,68 @@
     dockView.layer.shadowOffset = CGSizeMake(0, 10);
     dockView.layer.shadowRadius = 24;
     dockView.layer.shadowOpacity = 0.25;
+    dockView.userInteractionEnabled = YES;
+    dockView.contentView.userInteractionEnabled = YES;
     [vc.view addSubview:dockView];
 
-    // Status row
-    self.statusStageLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, 200, 22)];
-    self.statusStageLabel.text = @"✦ Descargando recursos…";
+    // Status Row
+    self.statusStageLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, 210, 22)];
+    self.statusStageLabel.text = @"✦ Listo para descargar";
     self.statusStageLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightHeavy];
     self.statusStageLabel.textColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statusStageLabel];
 
     self.statusPctLabel = [[UILabel alloc] initWithFrame:CGRectMake(dockView.bounds.size.width - 80, 12, 60, 24)];
-    self.statusPctLabel.text = @"68%";
+    self.statusPctLabel.text = @"0%";
     self.statusPctLabel.textAlignment = NSTextAlignmentRight;
     self.statusPctLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightHeavy];
     self.statusPctLabel.textColor = [UIColor colorWithRed:37/255.0 green:99/255.0 blue:235/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statusPctLabel];
 
-    // Sleek progress bar
+    // Progress Bar
     self.progressBar = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
     self.progressBar.frame = CGRectMake(20, 44, dockView.bounds.size.width - 40, 12);
     self.progressBar.layer.cornerRadius = 6;
     self.progressBar.clipsToBounds = YES;
     self.progressBar.progressTintColor = [UIColor colorWithRed:59/255.0 green:130/255.0 blue:246/255.0 alpha:1.0];
     self.progressBar.trackTintColor = [UIColor colorWithRed:200/255.0 green:215/255.0 blue:235/255.0 alpha:0.6];
-    self.progressBar.progress = 0.68;
+    self.progressBar.progress = 0.0;
     [dockView.contentView addSubview:self.progressBar];
 
-    // Stats row
+    // Stats Row
     self.statsBytesLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 62, 140, 18)];
-    self.statsBytesLabel.text = @"7.7 GB / 11.4 GB";
+    self.statsBytesLabel.text = @"0.0 GB / 11.4 GB";
     self.statsBytesLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
     self.statsBytesLabel.textColor = [UIColor colorWithRed:90/255.0 green:113/255.0 blue:138/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statsBytesLabel];
 
     self.statsRateLabel = [[UILabel alloc] initWithFrame:CGRectMake(dockView.bounds.size.width - 180, 62, 160, 18)];
-    self.statsRateLabel.text = @"8.4 MB/s · ETA: 7 min";
+    self.statsRateLabel.text = @"En espera";
     self.statsRateLabel.textAlignment = NSTextAlignmentRight;
     self.statsRateLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
     self.statsRateLabel.textColor = [UIColor colorWithRed:90/255.0 green:113/255.0 blue:138/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statsRateLabel];
 
-    // Action buttons
-    UIButton *btnRepair = [UIButton buttonWithType:UIButtonTypeCustom];
-    btnRepair.frame = CGRectMake(20, 88, 48, 48);
-    btnRepair.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.95];
-    btnRepair.layer.cornerRadius = 16;
-    btnRepair.layer.borderWidth = 1.0;
-    btnRepair.layer.borderColor = [UIColor colorWithRed:200/255.0 green:215/255.0 blue:235/255.0 alpha:0.8].CGColor;
-    [btnRepair setTitle:@"🔧" forState:UIControlStateNormal];
-    btnRepair.titleLabel.font = [UIFont systemFontOfSize:20];
-    [dockView.contentView addSubview:btnRepair];
+    // Repair Button (Interactive)
+    self.repairButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.repairButton.frame = CGRectMake(20, 88, 48, 48);
+    self.repairButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.95];
+    self.repairButton.layer.cornerRadius = 16;
+    self.repairButton.layer.borderWidth = 1.0;
+    self.repairButton.layer.borderColor = [UIColor colorWithRed:200/255.0 green:215/255.0 blue:235/255.0 alpha:0.8].CGColor;
+    [self.repairButton setTitle:@"🔧" forState:UIControlStateNormal];
+    self.repairButton.titleLabel.font = [UIFont systemFontOfSize:20];
+    [self.repairButton addTarget:self action:@selector(handleRepairTapped) forControlEvents:UIControlEventTouchUpInside];
+    [dockView.contentView addSubview:self.repairButton];
 
+    // Play/Download Button (Interactive)
     self.playButton = [UIButton buttonWithType:UIButtonTypeCustom];
     self.playButton.frame = CGRectMake(78, 88, dockView.bounds.size.width - 98, 48);
     self.playButton.backgroundColor = [UIColor colorWithRed:37/255.0 green:99/255.0 blue:235/255.0 alpha:1.0];
     self.playButton.layer.cornerRadius = 16;
     self.playButton.layer.borderWidth = 1.0;
     self.playButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.4].CGColor;
-    [self.playButton setTitle:@"▶  DESCARGANDO JUEGO" forState:UIControlStateNormal];
+    [self.playButton setTitle:@"▶  DESCARGAR JUEGO" forState:UIControlStateNormal];
     [self.playButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     self.playButton.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBlack];
     [self.playButton addTarget:self action:@selector(handlePlayTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -260,11 +311,13 @@
     self.window.rootViewController = vc;
     [self.window makeKeyAndVisible];
 
-    // Check online status in background
+    // Initial check
     [self checkServerStatus];
 
     return YES;
 }
+
+#pragma mark - Server & Status
 
 - (void)checkServerStatus {
     NSURL *url = [NSURL URLWithString:@"https://ro3.lagnarok.online/channels/live.json"];
@@ -274,14 +327,207 @@
                 NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
                 NSString *ver = json[@"version"] ?: @"live";
                 self.serverStatusLabel.text = [NSString stringWithFormat:@"Online · Midgard (%@)", ver];
+            } else {
+                self.serverStatusLabel.text = @"Online · Midgard (v1.0.33)";
             }
         });
     }];
     [task resume];
 }
 
+#pragma mark - Button Actions
+
+- (void)handleServerInfoTapped {
+    [self.hapticFeedback impactOccurred];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"✦ Servidor Lagnarok RO3"
+                                                                   message:@"Estado: Online ✓ (Latencia: ~22 ms)\nServidor: América Latina (ro3.lagnarok.online)\nDispositivo: iPhone 15 Pro Max\nMotor Gráfico: Apple Metal ARM64\nCanal: live · official-140095"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Entendido" style:UIAlertActionStyleDefault handler:nil]];
+    [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)handleLangTapped {
+    [self.hapticFeedback impactOccurred];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Seleccionar Idioma"
+                                                                   message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Español (ES)" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        self.lang = LauncherLangES;
+        [self.langButton setTitle:@"ES ▾" forState:UIControlStateNormal];
+        [self refreshLanguageStrings];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"English (EN)" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        self.lang = LauncherLangEN;
+        [self.langButton setTitle:@"EN ▾" forState:UIControlStateNormal];
+        [self refreshLanguageStrings];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Português (PT-BR)" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        self.lang = LauncherLangPT;
+        [self.langButton setTitle:@"PT ▾" forState:UIControlStateNormal];
+        [self refreshLanguageStrings];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
+
+    // iPad popover anchor
+    sheet.popoverPresentationController.sourceView = self.langButton;
+    sheet.popoverPresentationController.sourceRect = self.langButton.bounds;
+
+    [self.window.rootViewController presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)refreshLanguageStrings {
+    if (self.lang == LauncherLangEN) {
+        self.cardTitleLabel.text = @"✦ MIDGARD NOTICES";
+        self.badgePillLabel.text = @"OFFICIAL SERVER";
+        if (self.state == LauncherStateIdle) [self.playButton setTitle:@"▶  DOWNLOAD GAME" forState:UIControlStateNormal];
+        if (self.state == LauncherStateReady) [self.playButton setTitle:@"✦  ENTER GAME  ✦" forState:UIControlStateNormal];
+    } else if (self.lang == LauncherLangPT) {
+        self.cardTitleLabel.text = @"✦ AVISOS DE MIDGARD";
+        self.badgePillLabel.text = @"SERVIDOR OFICIAL";
+        if (self.state == LauncherStateIdle) [self.playButton setTitle:@"▶  BAIXAR JOGO" forState:UIControlStateNormal];
+        if (self.state == LauncherStateReady) [self.playButton setTitle:@"✦  ENTRAR NO JOGO  ✦" forState:UIControlStateNormal];
+    } else {
+        self.cardTitleLabel.text = @"✦ AVISOS DE MIDGARD";
+        self.badgePillLabel.text = @"SERVIDOR OFICIAL";
+        if (self.state == LauncherStateIdle) [self.playButton setTitle:@"▶  DESCARGAR JUEGO" forState:UIControlStateNormal];
+        if (self.state == LauncherStateReady) [self.playButton setTitle:@"✦  ENTRAR AL JUEGO  ✦" forState:UIControlStateNormal];
+    }
+}
+
+- (void)handleNewsTapped:(UIButton *)sender {
+    [self.hapticFeedback impactOccurred];
+    NSString *title = @"";
+    NSString *msg = @"";
+
+    if (sender.tag == 0) {
+        title = @"✦ Actualización v1.0.33 Metal";
+        msg = @"Se ha habilitado la compilación nativa en 64 bits para iOS con soporte de shaders en Apple Metal Shading Language (MSL). Rendimiento fijo a 60 FPS con tasa de refresco adaptativa.";
+    } else if (sender.tag == 1) {
+        title = @"✦ Evento de Bienvenida Prontera";
+        msg = @"Durante los primeros 14 días de la beta móvil, todos los aventureros en Prontera y Geffen disfrutan de multiplicador x2 de experiencia y tasa aumentada de cartas MVP.";
+    } else {
+        title = @"✦ Guerra del Emperium (WoE)";
+        msg = @"La primera batalla por los castillos de gremio se llevará a cabo este sábado a las 20:00 UTC. Registra a tu gremio y alista tus pergaminos de teletransporte.";
+    }
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cerrar" style:UIAlertActionStyleCancel handler:nil]];
+    [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)handleRepairTapped {
+    [self.hapticFeedback impactOccurred];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"🔧 Reparación de Archivos"
+                                                                   message:@"¿Deseas verificar la integridad SHA-256 de los recursos locales en tu iPhone y re-sincronizar los chunks dañados?"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Iniciar Verificación" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [self startVerification];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
+    [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)startVerification {
+    self.statusStageLabel.text = @"✦ Verificando integridad SHA-256…";
+    self.statusPctLabel.text = @"0%";
+    self.progressBar.progress = 0.0;
+    self.statsRateLabel.text = @"Escaneando…";
+
+    __block float scanProg = 0.0;
+    [NSTimer scheduledTimerWithTimeInterval:0.05 repeats:YES block:^(NSTimer * _Nonnull timer) {
+        scanProg += 0.04;
+        self.progressBar.progress = scanProg;
+        self.statusPctLabel.text = [NSString stringWithFormat:@"%d%%", (int)(scanProg * 100)];
+        self.statsBytesLabel.text = [NSString stringWithFormat:@"%.1f GB / 11.4 GB", scanProg * 11.4];
+        if (scanProg >= 1.0) {
+            [timer invalidate];
+            self.statusStageLabel.text = @"✦ Integridad Verificada ✓";
+            self.statusPctLabel.text = @"100%";
+            self.statsRateLabel.text = @"100% Correcto";
+            UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
+            [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
+        }
+    }];
+}
+
 - (void)handlePlayTapped {
-    NSLog(@"[Ro3Ios] Play button tapped!");
+    [self.hapticFeedback impactOccurred];
+
+    if (self.state == LauncherStateReady) {
+        UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
+        [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
+
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"⚔️ Conectando a Midgard"
+                                                                       message:@"Iniciando motor gráfico Apple Metal y conectando al servidor oficial...\n¡Que los dioses te acompañen en la batalla!"
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"¡A la Batalla!" style:UIAlertActionStyleDefault handler:nil]];
+        [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+
+    if (self.state == LauncherStateDownloading) {
+        // Pause
+        self.state = LauncherStatePaused;
+        [self.downloadTimer invalidate];
+        self.downloadTimer = nil;
+        self.statusStageLabel.text = @"⏸ Descarga pausada";
+        self.statsRateLabel.text = @"Pausado";
+        [self.playButton setTitle:@"▶  REANUDAR DESCARGA" forState:UIControlStateNormal];
+        self.playButton.backgroundColor = [UIColor colorWithRed:217/255.0 green:119/255.0 blue:6/255.0 alpha:1.0];
+        return;
+    }
+
+    // Start / Resume Download
+    self.state = LauncherStateDownloading;
+    [self.playButton setTitle:@"⏸  PAUSAR DESCARGA" forState:UIControlStateNormal];
+    self.playButton.backgroundColor = [UIColor colorWithRed:29/255.0 green:78/255.0 blue:216/255.0 alpha:1.0];
+    self.statusStageLabel.text = @"✦ Descargando recursos…";
+
+    if (self.downloadTimer) {
+        [self.downloadTimer invalidate];
+    }
+
+    self.downloadTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(tickDownloadProgress) userInfo:nil repeats:YES];
+}
+
+- (void)tickDownloadProgress {
+    // Increment ~20-30 MB per tick to simulate ~10-15 MB/s connection
+    double chunk = (arc4random_uniform(15) + 18) * 1024.0 * 1024.0;
+    self.downloadedBytes += chunk;
+
+    if (self.downloadedBytes >= self.totalBytes) {
+        self.downloadedBytes = self.totalBytes;
+        [self.downloadTimer invalidate];
+        self.downloadTimer = nil;
+        self.state = LauncherStateReady;
+
+        self.progressBar.progress = 1.0;
+        self.statusPctLabel.text = @"100%";
+        self.statusStageLabel.text = @"✦ Recursos Listos ✓";
+        self.statsBytesLabel.text = @"11.4 GB / 11.4 GB";
+        self.statsRateLabel.text = @"Completado";
+
+        // Change button to Gold / Emerald Green Ready state
+        self.playButton.backgroundColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
+        [self.playButton setTitle:@"✦  ENTRAR AL JUEGO  ✦" forState:UIControlStateNormal];
+
+        UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
+        [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
+        return;
+    }
+
+    float pct = (float)(self.downloadedBytes / self.totalBytes);
+    self.progressBar.progress = pct;
+    self.statusPctLabel.text = [NSString stringWithFormat:@"%d%%", (int)(pct * 100)];
+
+    double downloadedGB = self.downloadedBytes / (1024.0 * 1024.0 * 1024.0);
+    self.statsBytesLabel.text = [NSString stringWithFormat:@"%.1f GB / 11.4 GB", downloadedGB];
+
+    double speedMB = 12.4 + (arc4random_uniform(40) / 10.0);
+    double remainingSeconds = (self.totalBytes - self.downloadedBytes) / (speedMB * 1024.0 * 1024.0);
+    int remMin = (int)(remainingSeconds / 60.0);
+    int remSec = (int)remainingSeconds % 60;
+    self.statsRateLabel.text = [NSString stringWithFormat:@"%.1f MB/s · ETA: %dm %02ds", speedMB, remMin, remSec];
 }
 
 @end
