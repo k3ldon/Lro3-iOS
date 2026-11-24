@@ -1,5 +1,8 @@
 name: Compile iOS IPA (macOS Xcode Build)
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -61,9 +64,22 @@ jobs:
 
       - name: Package Payload and IPA
         run: |
-          echo "== Assembling IPA payload..."
+          echo "== Assembling IPA payload with Concept 1 UI..."
           mkdir -p Payload
           cp -r build/Lro3.xcarchive/Products/Applications/*.app Payload/
+          APP_DIR=$(ls -d Payload/*.app | head -n 1)
+
+          echo "== Compiling Concept 1 Cocoa Touch Launcher into $APP_DIR..."
+          ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          clang -arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 -fobjc-arc \
+            -framework UIKit -framework Foundation -framework CoreGraphics \
+            native/launcher/main.m native/stubs/stubs_ios.c -o "$APP_DIR/LagnarokRO3"
+
+          echo "== Injecting Launcher Assets (bg.jpg, logo-hero.png)..."
+          mkdir -p "$APP_DIR/assets"
+          cp native/launcher/assets/bg.jpg "$APP_DIR/assets/"
+          cp native/launcher/assets/logo-hero.png "$APP_DIR/assets/"
+
           zip -r9 Lro3-iOS.ipa Payload/
           ls -lh Lro3-iOS.ipa
 

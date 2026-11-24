@@ -5,3 +5,6 @@
 .DS_Store
 hooks/bin/
 hooks/obj/
+
+xcode-project.tar.gz
+
