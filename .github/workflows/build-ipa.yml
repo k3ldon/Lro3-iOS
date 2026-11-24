@@ -73,6 +73,7 @@ jobs:
           ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
           clang -arch arm64 -isysroot $ISYSROOT -miphoneos-version-min=14.0 -fobjc-arc \
             -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore \
+            -Wl,-rpath,@executable_path/Frameworks \
             native/launcher/main.m native/stubs/stubs_ios.c -o "$APP_DIR/LagnarokRO3"
 
           echo "== Injecting Launcher Assets (bg.jpg, logo-hero.png)..."

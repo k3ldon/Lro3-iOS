@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import <mach-o/ldsyms.h>
 
 typedef NS_ENUM(NSInteger, LauncherState) {
     LauncherStateIdle,
@@ -12,6 +13,51 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     LauncherLangEN,
     LauncherLangPT
 };
+
+@interface UnityAppController : NSObject<UIApplicationDelegate>
+@property (strong, nonatomic) UIWindow *window;
+@end
+
+@interface UnityFramework : NSObject
++ (UnityFramework*)getInstance;
+- (UnityAppController*)appController;
+- (void)setDataBundleId:(const char*)bundleId;
+- (void)runEmbeddedWithArgc:(int)argc argv:(char*[])argv appLaunchOpts:(NSDictionary*)appLaunchOpts;
+- (void)showUnityWindow;
+- (void)setExecuteHeader:(const void*)header;
+@end
+
+static int g_argc = 0;
+static char **g_argv = NULL;
+static NSDictionary *g_launchOptions = nil;
+
+static UnityFramework* UnityFrameworkLoad(void) {
+    NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+    bundlePath = [bundlePath stringByAppendingPathComponent:@"Frameworks/UnityFramework.framework"];
+
+    NSBundle *bundle = [NSBundle bundleWithPath:bundlePath];
+    if (![bundle isLoaded]) {
+        NSError *err = nil;
+        [bundle loadAndReturnError:&err];
+        if (err) {
+            NSLog(@"[Ro3Ios] Failed to load UnityFramework bundle: %@", err);
+        }
+    }
+
+    Class ufwClass = [bundle principalClass];
+    if (!ufwClass) {
+        ufwClass = NSClassFromString(@"UnityFramework");
+    }
+
+    UnityFramework *ufw = nil;
+    if (ufwClass && [ufwClass respondsToSelector:@selector(getInstance)]) {
+        ufw = [ufwClass getInstance];
+    }
+    if (ufw && ![ufw appController]) {
+        [ufw setExecuteHeader:&_mh_execute_header];
+    }
+    return ufw;
+}
 
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
 @property (strong, nonatomic) UIWindow *window;
@@ -38,12 +84,14 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    g_launchOptions = launchOptions;
+
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor colorWithRed:15/255.0 green:23/255.0 blue:42/255.0 alpha:1.0];
 
     self.state = LauncherStateIdle;
     self.lang = LauncherLangES;
-    self.totalBytes = 11.4 * 1024.0 * 1024.0 * 1024.0; // 11.4 GB
+    self.totalBytes = 11.4 * 1024.0 * 1024.0 * 1024.0;
     self.downloadedBytes = 0.0;
     self.hapticFeedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
     [self.hapticFeedback prepare];
@@ -58,7 +106,7 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     UIImageView *bgImageView = [[UIImageView alloc] initWithFrame:self.window.bounds];
     bgImageView.contentMode = UIViewContentModeScaleAspectFill;
     bgImageView.clipsToBounds = YES;
-    
+
     NSString *bgPath = [[NSBundle mainBundle] pathForResource:@"bg" ofType:@"jpg" inDirectory:@"assets"];
     if (!bgPath) bgPath = [[NSBundle mainBundle] pathForResource:@"bg" ofType:@"jpg"];
     if (bgPath) {
@@ -190,7 +238,7 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
         newsBtn.frame = CGRectMake(10, itemY - 4, newsCard.bounds.size.width - 20, 50);
         newsBtn.tag = [info[@"id"] integerValue];
         [newsBtn addTarget:self action:@selector(handleNewsTapped:) forControlEvents:UIControlEventTouchUpInside];
-        
+
         UILabel *tagLabel = [[UILabel alloc] initWithFrame:CGRectMake(8, 6, 48, 18)];
         tagLabel.text = info[@"tag"];
         tagLabel.textAlignment = NSTextAlignmentCenter;
@@ -240,16 +288,16 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
 
     // Status Row
     self.statusStageLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, 210, 22)];
-    self.statusStageLabel.text = @"✦ Listo para descargar";
+    self.statusStageLabel.text = @"✦ Listo para iniciar";
     self.statusStageLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightHeavy];
     self.statusStageLabel.textColor = [UIColor colorWithRed:30/255.0 green:45/255.0 blue:61/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statusStageLabel];
 
     self.statusPctLabel = [[UILabel alloc] initWithFrame:CGRectMake(dockView.bounds.size.width - 80, 12, 60, 24)];
-    self.statusPctLabel.text = @"0%";
+    self.statusPctLabel.text = @"100%";
     self.statusPctLabel.textAlignment = NSTextAlignmentRight;
     self.statusPctLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightHeavy];
-    self.statusPctLabel.textColor = [UIColor colorWithRed:37/255.0 green:99/255.0 blue:235/255.0 alpha:1.0];
+    self.statusPctLabel.textColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statusPctLabel];
 
     // Progress Bar
@@ -257,23 +305,23 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     self.progressBar.frame = CGRectMake(20, 44, dockView.bounds.size.width - 40, 12);
     self.progressBar.layer.cornerRadius = 6;
     self.progressBar.clipsToBounds = YES;
-    self.progressBar.progressTintColor = [UIColor colorWithRed:59/255.0 green:130/255.0 blue:246/255.0 alpha:1.0];
+    self.progressBar.progressTintColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
     self.progressBar.trackTintColor = [UIColor colorWithRed:200/255.0 green:215/255.0 blue:235/255.0 alpha:0.6];
-    self.progressBar.progress = 0.0;
+    self.progressBar.progress = 1.0;
     [dockView.contentView addSubview:self.progressBar];
 
     // Stats Row
     self.statsBytesLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 62, 140, 18)];
-    self.statsBytesLabel.text = @"0.0 GB / 11.4 GB";
+    self.statsBytesLabel.text = @"11.4 GB / 11.4 GB";
     self.statsBytesLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
     self.statsBytesLabel.textColor = [UIColor colorWithRed:90/255.0 green:113/255.0 blue:138/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statsBytesLabel];
 
     self.statsRateLabel = [[UILabel alloc] initWithFrame:CGRectMake(dockView.bounds.size.width - 180, 62, 160, 18)];
-    self.statsRateLabel.text = @"En espera";
+    self.statsRateLabel.text = @"Recursos verificados";
     self.statsRateLabel.textAlignment = NSTextAlignmentRight;
     self.statsRateLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
-    self.statsRateLabel.textColor = [UIColor colorWithRed:90/255.0 green:113/255.0 blue:138/255.0 alpha:1.0];
+    self.statsRateLabel.textColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
     [dockView.contentView addSubview:self.statsRateLabel];
 
     // Repair Button (Interactive)
@@ -288,14 +336,14 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     [self.repairButton addTarget:self action:@selector(handleRepairTapped) forControlEvents:UIControlEventTouchUpInside];
     [dockView.contentView addSubview:self.repairButton];
 
-    // Play/Download Button (Interactive)
+    // Play/Enter Button: Direct Entry to Game
     self.playButton = [UIButton buttonWithType:UIButtonTypeCustom];
     self.playButton.frame = CGRectMake(78, 88, dockView.bounds.size.width - 98, 48);
     self.playButton.backgroundColor = [UIColor colorWithRed:37/255.0 green:99/255.0 blue:235/255.0 alpha:1.0];
     self.playButton.layer.cornerRadius = 16;
     self.playButton.layer.borderWidth = 1.0;
     self.playButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.4].CGColor;
-    [self.playButton setTitle:@"▶  DESCARGAR JUEGO" forState:UIControlStateNormal];
+    [self.playButton setTitle:@"▶  JUGAR / ENTRAR A MIDGARD" forState:UIControlStateNormal];
     [self.playButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     self.playButton.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBlack];
     [self.playButton addTarget:self action:@selector(handlePlayTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -335,6 +383,50 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     [task resume];
 }
 
+#pragma mark - Game Launch Handler
+
+- (void)handlePlayTapped {
+    [self.hapticFeedback impactOccurred];
+    [self launchUnityGame];
+}
+
+- (void)launchUnityGame {
+    NSLog(@"[Ro3Ios] Launching Unity Framework into foreground...");
+
+    UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
+    [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
+
+    self.statusStageLabel.text = @"✦ Iniciando motor gráfico Metal…";
+    [self.playButton setTitle:@"⚔️  CARGANDO MIDGARD…" forState:UIControlStateNormal];
+    self.playButton.backgroundColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UnityFramework *ufw = UnityFrameworkLoad();
+        if (ufw) {
+            NSLog(@"[Ro3Ios] UnityFramework acquired: %@", ufw);
+            [ufw setDataBundleId:"com.unity3d.framework"];
+            if (![ufw appController]) {
+                NSLog(@"[Ro3Ios] Calling runEmbeddedWithArgc...");
+                [ufw runEmbeddedWithArgc:g_argc argv:g_argv appLaunchOpts:g_launchOptions];
+            }
+            NSLog(@"[Ro3Ios] Calling showUnityWindow...");
+            [ufw showUnityWindow];
+
+            UnityAppController *controller = [ufw appController];
+            if (controller && controller.window) {
+                [controller.window makeKeyAndVisible];
+            }
+        } else {
+            NSLog(@"[Ro3Ios] ERROR: UnityFramework is nil");
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Motor de Juego"
+                                                                           message:@"Iniciando conexión con el servidor de juego...\nSi es la primera vez, el motor descargará los paquetes delta restantes."
+                                                                    preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Entendido" style:UIAlertActionStyleDefault handler:nil]];
+            [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
+        }
+    });
+}
+
 #pragma mark - Button Actions
 
 - (void)handleServerInfoTapped {
@@ -368,7 +460,6 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
 
-    // iPad popover anchor
     sheet.popoverPresentationController.sourceView = self.langButton;
     sheet.popoverPresentationController.sourceRect = self.langButton.bounds;
 
@@ -379,18 +470,15 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     if (self.lang == LauncherLangEN) {
         self.cardTitleLabel.text = @"✦ MIDGARD NOTICES";
         self.badgePillLabel.text = @"OFFICIAL SERVER";
-        if (self.state == LauncherStateIdle) [self.playButton setTitle:@"▶  DOWNLOAD GAME" forState:UIControlStateNormal];
-        if (self.state == LauncherStateReady) [self.playButton setTitle:@"✦  ENTER GAME  ✦" forState:UIControlStateNormal];
+        [self.playButton setTitle:@"▶  PLAY / ENTER MIDGARD" forState:UIControlStateNormal];
     } else if (self.lang == LauncherLangPT) {
         self.cardTitleLabel.text = @"✦ AVISOS DE MIDGARD";
         self.badgePillLabel.text = @"SERVIDOR OFICIAL";
-        if (self.state == LauncherStateIdle) [self.playButton setTitle:@"▶  BAIXAR JOGO" forState:UIControlStateNormal];
-        if (self.state == LauncherStateReady) [self.playButton setTitle:@"✦  ENTRAR NO JOGO  ✦" forState:UIControlStateNormal];
+        [self.playButton setTitle:@"▶  JOGAR / ENTRAR EM MIDGARD" forState:UIControlStateNormal];
     } else {
         self.cardTitleLabel.text = @"✦ AVISOS DE MIDGARD";
         self.badgePillLabel.text = @"SERVIDOR OFICIAL";
-        if (self.state == LauncherStateIdle) [self.playButton setTitle:@"▶  DESCARGAR JUEGO" forState:UIControlStateNormal];
-        if (self.state == LauncherStateReady) [self.playButton setTitle:@"✦  ENTRAR AL JUEGO  ✦" forState:UIControlStateNormal];
+        [self.playButton setTitle:@"▶  JUGAR / ENTRAR A MIDGARD" forState:UIControlStateNormal];
     }
 }
 
@@ -450,89 +538,11 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
     }];
 }
 
-- (void)handlePlayTapped {
-    [self.hapticFeedback impactOccurred];
-
-    if (self.state == LauncherStateReady) {
-        UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
-        [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
-
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"⚔️ Conectando a Midgard"
-                                                                       message:@"Iniciando motor gráfico Apple Metal y conectando al servidor oficial...\n¡Que los dioses te acompañen en la batalla!"
-                                                                preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"¡A la Batalla!" style:UIAlertActionStyleDefault handler:nil]];
-        [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
-        return;
-    }
-
-    if (self.state == LauncherStateDownloading) {
-        // Pause
-        self.state = LauncherStatePaused;
-        [self.downloadTimer invalidate];
-        self.downloadTimer = nil;
-        self.statusStageLabel.text = @"⏸ Descarga pausada";
-        self.statsRateLabel.text = @"Pausado";
-        [self.playButton setTitle:@"▶  REANUDAR DESCARGA" forState:UIControlStateNormal];
-        self.playButton.backgroundColor = [UIColor colorWithRed:217/255.0 green:119/255.0 blue:6/255.0 alpha:1.0];
-        return;
-    }
-
-    // Start / Resume Download
-    self.state = LauncherStateDownloading;
-    [self.playButton setTitle:@"⏸  PAUSAR DESCARGA" forState:UIControlStateNormal];
-    self.playButton.backgroundColor = [UIColor colorWithRed:29/255.0 green:78/255.0 blue:216/255.0 alpha:1.0];
-    self.statusStageLabel.text = @"✦ Descargando recursos…";
-
-    if (self.downloadTimer) {
-        [self.downloadTimer invalidate];
-    }
-
-    self.downloadTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(tickDownloadProgress) userInfo:nil repeats:YES];
-}
-
-- (void)tickDownloadProgress {
-    // Increment ~20-30 MB per tick to simulate ~10-15 MB/s connection
-    double chunk = (arc4random_uniform(15) + 18) * 1024.0 * 1024.0;
-    self.downloadedBytes += chunk;
-
-    if (self.downloadedBytes >= self.totalBytes) {
-        self.downloadedBytes = self.totalBytes;
-        [self.downloadTimer invalidate];
-        self.downloadTimer = nil;
-        self.state = LauncherStateReady;
-
-        self.progressBar.progress = 1.0;
-        self.statusPctLabel.text = @"100%";
-        self.statusStageLabel.text = @"✦ Recursos Listos ✓";
-        self.statsBytesLabel.text = @"11.4 GB / 11.4 GB";
-        self.statsRateLabel.text = @"Completado";
-
-        // Change button to Gold / Emerald Green Ready state
-        self.playButton.backgroundColor = [UIColor colorWithRed:16/255.0 green:185/255.0 blue:129/255.0 alpha:1.0];
-        [self.playButton setTitle:@"✦  ENTRAR AL JUEGO  ✦" forState:UIControlStateNormal];
-
-        UINotificationFeedbackGenerator *successHaptic = [[UINotificationFeedbackGenerator alloc] init];
-        [successHaptic notificationOccurred:UINotificationFeedbackTypeSuccess];
-        return;
-    }
-
-    float pct = (float)(self.downloadedBytes / self.totalBytes);
-    self.progressBar.progress = pct;
-    self.statusPctLabel.text = [NSString stringWithFormat:@"%d%%", (int)(pct * 100)];
-
-    double downloadedGB = self.downloadedBytes / (1024.0 * 1024.0 * 1024.0);
-    self.statsBytesLabel.text = [NSString stringWithFormat:@"%.1f GB / 11.4 GB", downloadedGB];
-
-    double speedMB = 12.4 + (arc4random_uniform(40) / 10.0);
-    double remainingSeconds = (self.totalBytes - self.downloadedBytes) / (speedMB * 1024.0 * 1024.0);
-    int remMin = (int)(remainingSeconds / 60.0);
-    int remSec = (int)remainingSeconds % 60;
-    self.statsRateLabel.text = [NSString stringWithFormat:@"%.1f MB/s · ETA: %dm %02ds", speedMB, remMin, remSec];
-}
-
 @end
 
 int main(int argc, char * argv[]) {
+    g_argc = argc;
+    g_argv = argv;
     @autoreleasepool {
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
     }
