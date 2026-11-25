@@ -99,6 +99,7 @@ namespace Ro3Ios.Updater
             UpdateScreen.Trace("quickverify: scanning " + total + " files");
             foreach (var pair in State.Files)
             {
+                if (total - done <= 1024) UpdateScreen.Trace("qv@" + done + ": " + pair.Key);
                 var info = new FileInfo(Local(pair.Key));
                 if (!info.Exists || info.Length != pair.Value.Size || info.LastWriteTimeUtc.Ticks != pair.Value.MtimeTicks) changed.Add(pair.Key);
                 if (++done % 4096 == 0) UpdateScreen.Trace("quickverify: " + done + "/" + total);
