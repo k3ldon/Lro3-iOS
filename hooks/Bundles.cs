@@ -70,19 +70,51 @@ public static class Bundles
     private static bool RetargetBundle(string srcPath, ulong offset, string dstPath)
     {
         if (!File.Exists(srcPath)) return false;
-        using var fs = new FileStream(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (offset > 0) fs.Seek((long)offset, SeekOrigin.Begin);
+        byte[] data;
+        if (offset == 0)
+        {
+            data = File.ReadAllBytes(srcPath);
+        }
+        else
+        {
+            using var fs = new FileStream(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            fs.Seek((long)offset, SeekOrigin.Begin);
+            data = new byte[fs.Length - (long)offset];
+            fs.Read(data, 0, data.Length);
+        }
 
-        byte[] header = new byte[128];
-        int read = fs.Read(header, 0, header.Length);
-        if (read < 16) return false;
-
-        string signature = ReadNullTerminatedAscii(header, 0);
+        if (data.Length < 32) return false;
+        string signature = ReadNullTerminatedAscii(data, 0);
         if (signature != "UnityFS") return false;
 
-        fs.Seek((long)offset, SeekOrigin.Begin);
-        using var outFs = new FileStream(dstPath, FileMode.Create, FileAccess.Write, FileShare.None);
-        fs.CopyTo(outFs);
+        // Scan for Unity version string "2022.3.62f3\0" followed by target platform 19 (StandaloneWindows64)
+        // and retarget it to 9 (iOS)
+        byte[] verBytes = Encoding.ASCII.GetBytes("2022.3.62f3\0");
+        bool patched = false;
+        for (int i = 0; i < data.Length - verBytes.Length - 8; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < verBytes.Length; j++)
+            {
+                if (data[i + j] != verBytes[j]) { match = false; break; }
+            }
+            if (match)
+            {
+                int platformOffset = i + verBytes.Length;
+                int platform = BitConverter.ToInt32(data, platformOffset);
+                if (platform == 19) // StandaloneWindows64
+                {
+                    data[platformOffset] = (byte)TargetPlatformIos; // 9 = iOS
+                    data[platformOffset + 1] = 0;
+                    data[platformOffset + 2] = 0;
+                    data[platformOffset + 3] = 0;
+                    patched = true;
+                    Debug.Log($"[Ro3Ios.Bundles] Retargeted {Path.GetFileName(srcPath)} from platform {platform} to {TargetPlatformIos} (offset 0x{platformOffset:X})");
+                }
+            }
+        }
+
+        File.WriteAllBytes(dstPath, data);
         return true;
     }
 
