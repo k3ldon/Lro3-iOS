@@ -338,7 +338,16 @@ namespace Ro3Ios.Updater
                 case View.Checking:
                     Line(ref y, x, w, scale, _message, _text);
                     if (_installer.Status.Stage == Stage.Scanning) Progress(ref y, x, w, scale);
-                    Line(ref y, x, w, scale, TraceText(), _trace);
+                    lock (_traceLock)
+                    {
+                        foreach (var tline in _traceLines)
+                        {
+                            GUI.Label(new Rect(x, y, w, 24 * scale), tline, _trace);
+                            y += 24 * scale;
+                        }
+                    }
+                    y += 16 * scale;
+                    if (_offlinePlayable && Button(ref y, x, w, scale, "Iniciar juego directamente")) _view = View.Done;
                     break;
                 case View.Confirm:
                     Line(ref y, x, w, scale, $"Es necesario descargar {Installer.Format(_plan.DownloadBytes)} ({_plan.Install.Count} archivos).", _text);

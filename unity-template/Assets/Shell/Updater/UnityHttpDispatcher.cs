@@ -26,7 +26,7 @@ namespace Ro3Ios.Updater
 
         public static Task<(int Status, byte[] Body)> GetAsync(Uri uri, CancellationToken ct, int timeoutSeconds = 25)
         {
-            var tcs = new TaskCompletionSource<(int Status, byte[] Body)>();
+            var tcs = new TaskCompletionSource<(int Status, byte[] Body)>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (ct.IsCancellationRequested)
             {
                 tcs.SetCanceled();
