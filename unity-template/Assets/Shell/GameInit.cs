@@ -40,39 +40,8 @@ namespace Ro3Ios.Shell
                 UnityEngine.Object.DontDestroyOnLoad(es);
             }
 
-            Type startup = null;
-            try { System.Reflection.Assembly.Load("Assembly-CSharp"); } catch { }
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                startup = asm.GetType("Ro3Startup");
-                if (startup != null)
-                {
-                    Debug.Log("[Ro3Ios] Found Ro3Startup in assembly: " + asm.FullName);
-                    break;
-                }
-            }
-
-            if (startup != null)
-            {
-                Debug.Log("[Ro3Ios] Starting game via Type (Ro3Startup)");
-                new GameObject("Startup").AddComponent(startup);
-                return;
-            }
-
-            // Fallback: try Unity string-based AddComponent which searches engine type registry
-            Debug.LogWarning("[Ro3Ios] Searching Ro3Startup via Unity engine component registry...");
-            var go = new GameObject("Startup");
-            var comp = go.AddComponent("Ro3Startup");
-            if (comp != null)
-            {
-                Debug.Log("[Ro3Ios] Starting game via engine component registry (Ro3Startup)");
-                return;
-            }
-
-            var sb = new System.Text.StringBuilder("[Ro3Ios] Loaded assemblies: ");
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies()) sb.Append(asm.GetName().Name).Append(", ");
-            Debug.LogError(sb.ToString());
-            Debug.LogError("[Ro3Ios] Ro3Startup not found: game assemblies missing from build");
+            Debug.Log("[Ro3Ios] Starting game: creating Startup GameObject with Ro3Startup component");
+            new GameObject("Startup").AddComponent<Ro3Startup>();
         }
     }
 }
