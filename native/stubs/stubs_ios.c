@@ -3,6 +3,13 @@
 
 #define EXPORT __attribute__((visibility("default")))
 
+EXPORT void NSLog(const char* format, const char* arg);
+
+EXPORT void Ro3IosLog(const char* message)
+{
+    if (NSLog && message) NSLog("%s", message);
+}
+
 EXPORT int32_t AkSoundEngine_Init(void* settings) { return 1; }
 EXPORT int32_t AkSoundEngine_Term(void) { return 1; }
 EXPORT uint32_t AkSoundEngine_PostEvent(const char* name, uint64_t gameObj) { return 0; }

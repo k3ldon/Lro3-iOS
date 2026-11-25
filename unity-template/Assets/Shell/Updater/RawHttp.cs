@@ -113,14 +113,16 @@ namespace Ro3Ios.Updater
                     {
                         try
                         {
-                            await c._tcp.ConnectAsync(uri.Host, uri.Port).ConfigureAwait(false);
-                            c.Stream = c._tcp.GetStream();
-                            if (uri.Scheme == "https")
-                            {
-                                var ssl = new SslStream(c.Stream, false);
-                                await ssl.AuthenticateAsClientAsync(uri.Host).ConfigureAwait(false);
-                                c.Stream = ssl;
-                            }
+                await c._tcp.ConnectAsync(uri.Host, uri.Port).ConfigureAwait(false);
+                c.Stream = c._tcp.GetStream();
+                if (uri.Scheme == "https")
+                {
+                    var ssl = new SslStream(c.Stream, false);
+                    UpdateScreen.Trace("tls: authenticating " + uri.Host);
+                    await ssl.AuthenticateAsClientAsync(uri.Host).ConfigureAwait(false);
+                    UpdateScreen.Trace("tls: ok " + uri.Host);
+                    c.Stream = ssl;
+                }
                             return c;
                         }
                         catch (Exception e)

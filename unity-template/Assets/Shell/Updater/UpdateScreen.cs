@@ -33,6 +33,16 @@ namespace Ro3Ios.Updater
                 _traceLines.Add(_traceClock.Elapsed.TotalSeconds.ToString("0.0") + "s " + message);
                 while (_traceLines.Count > 10) _traceLines.RemoveAt(0);
             }
+            NativeLog(message);
+        }
+
+        [System.Runtime.InteropServices.DllImport("__Internal", EntryPoint = "Ro3IosLog")]
+        static extern void Ro3IosLog(string message);
+
+        static void NativeLog(string message)
+        {
+            try { Ro3IosLog("[Ro3Ios.updater] " + message); }
+            catch (Exception) { }
         }
         public static string TraceText()
         {
