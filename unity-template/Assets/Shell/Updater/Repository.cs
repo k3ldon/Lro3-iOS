@@ -42,7 +42,9 @@ namespace Ro3Ios.Updater
 
         public async Task<byte[]> GetManifestAsync(Channel channel, CancellationToken ct)
         {
+            UpdateScreen.Trace("http GET " + channel.Manifest);
             byte[] raw = await GetOkAsync(channel.Manifest, ct).ConfigureAwait(false);
+            UpdateScreen.Trace("http <- manifest " + raw.Length + " B");
             if (!string.Equals(Hex.Sha256(raw, 0, raw.Length), channel.ManifestSha256, StringComparison.OrdinalIgnoreCase))
                 throw new UpdateException("O manifesto da atualização veio corrompido. Tente de novo em instantes.");
             return raw;

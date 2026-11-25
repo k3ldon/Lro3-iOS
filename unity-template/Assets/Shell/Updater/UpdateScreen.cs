@@ -138,10 +138,20 @@ namespace Ro3Ios.Updater
                     return;
                 }
 
-                if (!verifyAll && _installer.IsComplete(_channel) && _installer.QuickVerify().Count == 0)
+                if (verifyAll || !_installer.IsComplete(_channel))
                 {
-                    _view = View.Done;
-                    return;
+                    Trace("iscomplete=false, going to plan");
+                }
+                else
+                {
+                    Trace("quickverify: " + _installer.State.Files.Count + " files");
+                    var quick = _installer.QuickVerify();
+                    Trace("quickverify done: " + quick.Count + " changed");
+                    if (quick.Count == 0)
+                    {
+                        _view = View.Done;
+                        return;
+                    }
                 }
 
                 _message = "Comprobando archivos del juego…";

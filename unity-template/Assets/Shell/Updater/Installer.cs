@@ -111,8 +111,11 @@ namespace Ro3Ios.Updater
         {
             Status.Set(Stage.Checking, 0);
             var plan = new Plan { Channel = channel };
+            UpdateScreen.Trace("plan: fetching manifest " + channel.Manifest);
             plan.ManifestRaw = await _repo.GetManifestAsync(channel, ct).ConfigureAwait(false);
+            UpdateScreen.Trace("plan: manifest fetched " + plan.ManifestRaw.Length + " B");
             plan.Manifest = Manifest.Parse(plan.ManifestRaw);
+            UpdateScreen.Trace("plan: manifest parsed, " + plan.Manifest.Files.Count + " files");
             var state = State;
             _files.Clear();
 
