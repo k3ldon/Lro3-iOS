@@ -1,0 +1,15 @@
+<linker>
+  <assembly fullname="Assembly-CSharp" preserve="all"/>
+  <assembly fullname="Ro3Ios.Shell" preserve="all"/>
+  <assembly fullname="Ro3Ios.Hooks" preserve="all"/>
+  <assembly fullname="Phonest.ClientForUnity" preserve="all"/>
+  <assembly fullname="Phonest.GameHost" preserve="all"/>
+  <assembly fullname="Phonest.Common" preserve="all"/>
+  <assembly fullname="Phonest.Core" preserve="all"/>
+  <assembly fullname="Phonest.Net" preserve="all"/>
+  <assembly fullname="Phonest.Property.Client" preserve="all"/>
+  <assembly fullname="Phonest.Property.Common" preserve="all"/>
+  <assembly fullname="Happyengine.Base.Runtime" preserve="all"/>
+  <assembly fullname="Happyengine.UI.Framework" preserve="all"/>
+  <assembly fullname="HappyEngine.Resource" preserve="all"/>
+</linker>

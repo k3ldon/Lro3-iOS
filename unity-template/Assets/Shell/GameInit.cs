@@ -40,9 +40,23 @@ namespace Ro3Ios.Shell
                 UnityEngine.Object.DontDestroyOnLoad(es);
             }
 
-            var startup = Type.GetType("Ro3Startup, Assembly-CSharp");
+            Type startup = null;
+            try { System.Reflection.Assembly.Load("Assembly-CSharp"); } catch { }
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                startup = asm.GetType("Ro3Startup");
+                if (startup != null)
+                {
+                    Debug.Log("[Ro3Ios] Found Ro3Startup in assembly: " + asm.FullName);
+                    break;
+                }
+            }
+
             if (startup == null)
             {
+                var sb = new System.Text.StringBuilder("[Ro3Ios] Loaded assemblies: ");
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies()) sb.Append(asm.GetName().Name).Append(", ");
+                Debug.LogError(sb.ToString());
                 Debug.LogError("[Ro3Ios] Ro3Startup not found: game assemblies missing from build");
                 return;
             }
