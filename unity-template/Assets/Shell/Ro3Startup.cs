@@ -22,7 +22,7 @@ namespace Ro3Ios.Shell
         private void StartLauncher()
         {
             string relPath = GetBundleRelativePath(HashString(StartupBundleName));
-            string fullPath = Path.Combine(VfsRoot, relPath);
+            string fullPath = ResolveBundlePath(relPath);
             Debug.Log("[Ro3Startup] Loading startup bundle: " + fullPath);
 
             AssetBundle bundle = Bundles.LoadFromFile(fullPath);
@@ -47,6 +47,47 @@ namespace Ro3Ios.Shell
             UnityEngine.Object.Instantiate(prefab);
             bundle.Unload(false);
             Destroy(gameObject);
+        }
+
+        private static string ResolveBundlePath(string relPath)
+        {
+            string[] searchRoots = new[]
+            {
+                Path.Combine(Application.persistentDataPath, "ro3_Data", "StreamingAssets", "VFS"),
+                Path.Combine(Application.persistentDataPath, "StreamingAssets", "VFS"),
+                Path.Combine(Application.persistentDataPath, "VFS"),
+                Path.Combine(Application.persistentDataPath, "ro3_Data", "StreamingAssets"),
+                Path.Combine(Application.persistentDataPath, "StreamingAssets"),
+                Path.Combine(Paths.StreamingAssets(), "VFS"),
+                Path.Combine(Application.streamingAssetsPath, "VFS")
+            };
+
+            foreach (var root in searchRoots)
+            {
+                string candidate = Path.Combine(root, relPath);
+                if (File.Exists(candidate))
+                {
+                    Debug.Log("[Ro3Startup] Found startup bundle at: " + candidate);
+                    return candidate;
+                }
+            }
+
+            Debug.LogWarning("[Ro3Startup] Searching persistentDataPath for " + Path.GetFileName(relPath) + "...");
+            try
+            {
+                var found = Directory.GetFiles(Application.persistentDataPath, Path.GetFileName(relPath), SearchOption.AllDirectories);
+                if (found.Length > 0)
+                {
+                    Debug.Log("[Ro3Startup] Found startup bundle recursively at: " + found[0]);
+                    return found[0];
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[Ro3Startup] Recursive search error: " + ex.Message);
+            }
+
+            return Path.Combine(Paths.StreamingAssets(), "VFS", relPath);
         }
 
         private static string GetBundleRelativePath(ulong hash)
