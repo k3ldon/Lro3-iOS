@@ -200,6 +200,7 @@ namespace Ro3Ios.Updater
 
         void Update()
         {
+            UnityHttpDispatcher.ProcessQueue(this);
             if (_installer == null) return;
             if (_view == View.Done) Finish();
         }
