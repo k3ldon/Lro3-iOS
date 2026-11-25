@@ -13,11 +13,12 @@ namespace Ro3Ios.Updater
         readonly HttpClient _http;
         public Uri BaseUri { get; }
 
-        /// <summary>The app's: <see cref="RawHttp"/> with <paramref name="connections"/> parallel connections.</summary>
+        /// <summary>The app's: native iOS HttpClient with Apple CFNetwork engine.</summary>
         public Repository(Uri baseUri, int connections = 48)
         {
             BaseUri = WithSlash(baseUri);
-            _raw = new RawHttp(connections);
+            _http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("Ro3Ios/1.0");
         }
 
         /// <summary>Through an HttpMessageHandler (tests serve a folder without sockets).</summary>
