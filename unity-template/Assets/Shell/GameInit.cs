@@ -52,17 +52,27 @@ namespace Ro3Ios.Shell
                 }
             }
 
-            if (startup == null)
+            if (startup != null)
             {
-                var sb = new System.Text.StringBuilder("[Ro3Ios] Loaded assemblies: ");
-                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies()) sb.Append(asm.GetName().Name).Append(", ");
-                Debug.LogError(sb.ToString());
-                Debug.LogError("[Ro3Ios] Ro3Startup not found: game assemblies missing from build");
+                Debug.Log("[Ro3Ios] Starting game via Type (Ro3Startup)");
+                new GameObject("Startup").AddComponent(startup);
                 return;
             }
 
-            Debug.Log("[Ro3Ios] Starting game (Ro3Startup)");
-            new GameObject("Startup").AddComponent(startup);
+            // Fallback: try Unity string-based AddComponent which searches engine type registry
+            Debug.LogWarning("[Ro3Ios] Searching Ro3Startup via Unity engine component registry...");
+            var go = new GameObject("Startup");
+            var comp = go.AddComponent("Ro3Startup");
+            if (comp != null)
+            {
+                Debug.Log("[Ro3Ios] Starting game via engine component registry (Ro3Startup)");
+                return;
+            }
+
+            var sb = new System.Text.StringBuilder("[Ro3Ios] Loaded assemblies: ");
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies()) sb.Append(asm.GetName().Name).Append(", ");
+            Debug.LogError(sb.ToString());
+            Debug.LogError("[Ro3Ios] Ro3Startup not found: game assemblies missing from build");
         }
     }
 }
