@@ -95,11 +95,15 @@ namespace Ro3Ios.Updater
         public List<string> QuickVerify()
         {
             var changed = new List<string>();
+            int done = 0, total = State.Files.Count;
+            UpdateScreen.Trace("quickverify: scanning " + total + " files");
             foreach (var pair in State.Files)
             {
                 var info = new FileInfo(Local(pair.Key));
                 if (!info.Exists || info.Length != pair.Value.Size || info.LastWriteTimeUtc.Ticks != pair.Value.MtimeTicks) changed.Add(pair.Key);
+                if (++done % 4096 == 0) UpdateScreen.Trace("quickverify: " + done + "/" + total);
             }
+            UpdateScreen.Trace("quickverify: scanned " + done + " files");
             return changed;
         }
 

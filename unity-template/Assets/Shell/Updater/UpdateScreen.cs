@@ -144,8 +144,8 @@ namespace Ro3Ios.Updater
                 }
                 else
                 {
-                    Trace("quickverify: " + _installer.State.Files.Count + " files");
-                    var quick = _installer.QuickVerify();
+                    Trace("iscomplete=true, quick-verifying");
+                    var quick = await Task.Run(() => _installer.QuickVerify());
                     Trace("quickverify done: " + quick.Count + " changed");
                     if (quick.Count == 0)
                     {
