@@ -33,17 +33,9 @@ namespace Ro3Ios.Updater
                 _traceLines.Add(_traceClock.Elapsed.TotalSeconds.ToString("0.0") + "s " + message);
                 while (_traceLines.Count > 10) _traceLines.RemoveAt(0);
             }
-            NativeLog(message);
+            Debug.Log("[Ro3Ios.updater] " + message);
         }
 
-        [System.Runtime.InteropServices.DllImport("__Internal", EntryPoint = "syslog")]
-        static extern void syslog(int priority, string message);
-
-        static void NativeLog(string message)
-        {
-            try { syslog(5, "[Ro3Ios.updater] " + message); }
-            catch (Exception) { }
-        }
         public static string TraceText()
         {
             lock (_traceLock) { return string.Join("\n", _traceLines); }
@@ -68,6 +60,7 @@ namespace Ro3Ios.Updater
 
         void Start()
         {
+            Input.simulateMouseWithTouches = true;
             _root = Application.persistentDataPath;
             _appVersion = Application.version;
             var config = Resources.Load<TextAsset>("Ro3Patch");
@@ -389,7 +382,17 @@ namespace Ro3Ios.Updater
 
         bool Button(ref float y, float x, float w, float scale, string label)
         {
-            bool clicked = GUI.Button(new Rect(x + w / 2 - 220 * scale, y + 10 * scale, 440 * scale, 64 * scale), label, _buttonStyle);
+            var rect = new Rect(x + w / 2 - 220 * scale, y + 10 * scale, 440 * scale, 64 * scale);
+            bool clicked = GUI.Button(rect, label, _buttonStyle);
+            if (!clicked && Input.touchCount > 0)
+            {
+                var t = Input.GetTouch(0);
+                if (t.phase == TouchPhase.Began)
+                {
+                    var p = new Vector2(t.position.x, Screen.height - t.position.y);
+                    if (rect.Contains(p)) clicked = true;
+                }
+            }
             y += 84 * scale;
             return clicked;
         }
