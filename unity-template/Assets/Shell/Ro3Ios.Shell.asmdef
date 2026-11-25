@@ -1,7 +1,9 @@
 {
   "name": "Ro3Ios.Shell",
   "rootNamespace": "Ro3Ios.Shell",
-  "references": [],
+  "references": [
+    "Ro3Ios.Hooks"
+  ],
   "includePlatforms": [
     "iOS",
     "Editor"
