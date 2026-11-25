@@ -36,12 +36,12 @@ namespace Ro3Ios.Updater
             NativeLog(message);
         }
 
-        [System.Runtime.InteropServices.DllImport("__Internal", EntryPoint = "Ro3IosLog")]
-        static extern void Ro3IosLog(string message);
+        [System.Runtime.InteropServices.DllImport("__Internal", EntryPoint = "syslog")]
+        static extern void syslog(int priority, string message);
 
         static void NativeLog(string message)
         {
-            try { Ro3IosLog("[Ro3Ios.updater] " + message); }
+            try { syslog(5, "[Ro3Ios.updater] " + message); }
             catch (Exception) { }
         }
         public static string TraceText()
