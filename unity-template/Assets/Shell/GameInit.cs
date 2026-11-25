@@ -8,6 +8,7 @@ namespace Ro3Ios.Shell
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
+            RemoteLogger.Init();
             var updater = Type.GetType("Ro3Ios.Updater.UpdateScreen, Ro3Ios.Shell")
                        ?? Type.GetType("Ro3Ios.Updater.UpdateScreen");
             if (updater != null)
