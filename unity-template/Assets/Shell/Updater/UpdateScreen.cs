@@ -31,7 +31,7 @@ namespace Ro3Ios.Updater
             {
                 _traceClock = _traceClock ?? System.Diagnostics.Stopwatch.StartNew();
                 _traceLines.Add(_traceClock.Elapsed.TotalSeconds.ToString("0.0") + "s " + message);
-                while (_traceLines.Count > 14) _traceLines.RemoveAt(0);
+                while (_traceLines.Count > 10) _traceLines.RemoveAt(0);
             }
         }
         public static string TraceText()
@@ -54,7 +54,7 @@ namespace Ro3Ios.Updater
         Thread _notifier;
 
         Texture2D _bg, _barBack, _barFill, _button;
-        GUIStyle _title, _text, _small, _buttonStyle;
+        GUIStyle _title, _text, _small, _trace, _buttonStyle;
 
         void Start()
         {
@@ -320,6 +320,8 @@ namespace Ro3Ios.Updater
             _text.normal.textColor = Color.white;
             _small = new GUIStyle(_text) { fontSize = (int)(16 * scale) };
             _small.normal.textColor = new Color32(160, 170, 190, 255);
+            _trace = new GUIStyle(GUI.skin.label) { fontSize = (int)(18 * scale), alignment = TextAnchor.UpperLeft, wordWrap = false };
+            _trace.normal.textColor = new Color32(220, 226, 238, 255);
             _buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = (int)(22 * scale), fontStyle = FontStyle.Bold };
             _buttonStyle.normal.background = _button;
             _buttonStyle.active.background = _barFill;
@@ -342,7 +344,7 @@ namespace Ro3Ios.Updater
                 case View.Checking:
                     Line(ref y, x, w, scale, _message, _text);
                     if (_installer.Status.Stage == Stage.Scanning) Progress(ref y, x, w, scale);
-                    Line(ref y, x, w, scale, TraceText(), _small);
+                    Line(ref y, x, w, scale, TraceText(), _trace);
                     break;
                 case View.Confirm:
                     Line(ref y, x, w, scale, $"Es necesario descargar {Installer.Format(_plan.DownloadBytes)} ({_plan.Install.Count} archivos).", _text);
