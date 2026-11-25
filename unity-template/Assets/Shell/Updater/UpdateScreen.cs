@@ -145,12 +145,24 @@ namespace Ro3Ios.Updater
                 else
                 {
                     Trace("iscomplete=true, quick-verifying");
-                    var quick = await Task.Run(() => _installer.QuickVerify());
-                    Trace("quickverify done: " + quick.Count + " changed");
-                    if (quick.Count == 0)
+                    // On iOS a stat on some Lua payload files can hang: bound the scan, a stuck one just
+                    // re-verifies via the full plan path instead of freezing the updater forever.
+                    var quickTask = Task.Run(() => _installer.QuickVerify());
+                    var winner = await Task.WhenAny(quickTask, Task.Delay(TimeSpan.FromSeconds(20), _cts.Token)).ConfigureAwait(false);
+                    if (winner != quickTask)
                     {
-                        _view = View.Done;
-                        return;
+                        Trace("quickverify timed out: continuing without it");
+                        verifyAll = false;
+                    }
+                    else
+                    {
+                        var quick = quickTask.Result;
+                        Trace("quickverify done: " + quick.Count + " changed");
+                        if (quick.Count == 0)
+                        {
+                            _view = View.Done;
+                            return;
+                        }
                     }
                 }
 
@@ -158,6 +170,11 @@ namespace Ro3Ios.Updater
                 Trace("preparing plan (manifest " + _channel.Manifest + ")");
                 _plan = await _installer.PrepareAsync(_channel, verifyAll, _cts.Token);
                 Trace("plan ready: " + _plan.Install.Count + " files, " + _plan.DownloadBytes + " bytes");
+                if (_plan.Install.Count == 0 && _plan.DownloadBytes == 0 && _plan.Delete.Count == 0)
+                {
+                    _view = View.Done;
+                    return;
+                }
 
                 if (_plan.DownloadBytes > 0 && (!_wifi || _plan.DownloadBytes > (500L << 20)))
                 {

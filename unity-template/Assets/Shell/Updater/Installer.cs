@@ -99,7 +99,7 @@ namespace Ro3Ios.Updater
             UpdateScreen.Trace("quickverify: scanning " + total + " files");
             foreach (var pair in State.Files)
             {
-                if (total - done <= 1024) UpdateScreen.Trace("qv@" + done + ": " + pair.Key);
+                if (total - done <= 64) UpdateScreen.Trace("qv: " + Tail(pair.Key, 44));
                 var info = new FileInfo(Local(pair.Key));
                 if (!info.Exists || info.Length != pair.Value.Size || info.LastWriteTimeUtc.Ticks != pair.Value.MtimeTicks) changed.Add(pair.Key);
                 if (++done % 4096 == 0) UpdateScreen.Trace("quickverify: " + done + "/" + total);
@@ -107,6 +107,8 @@ namespace Ro3Ios.Updater
             UpdateScreen.Trace("quickverify: scanned " + done + " files");
             return changed;
         }
+
+        static string Tail(string s, int n) => s.Length <= n ? s : "..." + s.Substring(s.Length - n);
 
         /// <summary>
         /// Compares the release with the folder. Files the state does not vouch for (a phone filled by adb, a repair)
