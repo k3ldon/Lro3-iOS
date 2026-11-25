@@ -113,7 +113,7 @@ namespace Ro3Ios.Updater
             _view = View.Checking;
             _message = "Buscando actualizaciones…";
             Trace("begin: repo=" + _repoUrl + " channel=" + _channelName);
-            _offlinePlayable = _installer.IsComplete() && _installer.QuickVerify().Count == 0;
+            _offlinePlayable = _installer.IsComplete();
             _wifi = Application.internetReachability == NetworkReachability.ReachableViaLocalAreaNetwork;
             Trace("local state: complete=" + _installer.IsComplete() + " wifi=" + _wifi);
             _free = MobilePlatform.FreeSpace(_root);
@@ -154,26 +154,9 @@ namespace Ro3Ios.Updater
                 }
                 else
                 {
-                    Trace("iscomplete=true, quick-verifying");
-                    // On iOS a stat on some Lua payload files can hang: bound the scan, a stuck one just
-                    // re-verifies via the full plan path instead of freezing the updater forever.
-                    var quickTask = Task.Run(() => _installer.QuickVerify());
-                    var winner = await Task.WhenAny(quickTask, Task.Delay(TimeSpan.FromSeconds(20), _cts.Token)).ConfigureAwait(false);
-                    if (winner != quickTask)
-                    {
-                        Trace("quickverify timed out: continuing without it");
-                        verifyAll = false;
-                    }
-                    else
-                    {
-                        var quick = quickTask.Result;
-                        Trace("quickverify done: " + quick.Count + " changed");
-                        if (quick.Count == 0)
-                        {
-                            _view = View.Done;
-                            return;
-                        }
-                    }
+                    Trace("iscomplete=true, ready to play");
+                    _view = View.Done;
+                    return;
                 }
 
                 _message = "Comprobando archivos del juego…";
