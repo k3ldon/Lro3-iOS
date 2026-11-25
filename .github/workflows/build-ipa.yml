@@ -23,7 +23,7 @@ jobs:
 
       - name: Download Exported Xcode Project
         run: |
-          gh release download v1.1.9-xcode -R k3ldon/Lro3-iOS -p xcode-project.tar.gz -O xcode-project.tar.gz
+          gh release download v1.2.0-xcode -R k3ldon/Lro3-iOS -p xcode-project.tar.gz -O xcode-project.tar.gz
           mkdir -p xcode
           tar -xzf xcode-project.tar.gz -C xcode
           ls xcode/ | head -n 10
