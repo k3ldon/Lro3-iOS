@@ -44,8 +44,23 @@ namespace Ro3Ios.Shell
             }
 
             Debug.Log("[Ro3Startup] Instantiating launcher prefab: " + prefab.name);
-            UnityEngine.Object.Instantiate(prefab);
+            var inst = UnityEngine.Object.Instantiate(prefab);
             bundle.Unload(false);
+
+            var go = inst as GameObject;
+            if (go != null)
+            {
+                if (go.GetComponent<HappyEngine.Base.CoroutineManager>() == null)
+                {
+                    go.AddComponent<HappyEngine.Base.CoroutineManager>();
+                }
+                if (go.GetComponent<Launcher>() == null)
+                {
+                    Debug.Log("[Ro3Startup] Attaching Launcher component to instantiated prefab");
+                    go.AddComponent<Launcher>();
+                }
+            }
+
             Destroy(gameObject);
         }
 
