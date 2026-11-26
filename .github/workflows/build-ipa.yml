@@ -123,56 +123,50 @@ jobs:
           done
           echo "Core Data files present."
 
-          echo "== 4. UnityFS magic and platform byte retargeted to iOS (9) =="
+          echo "== 4. Serialized file version and platform retargeted to iOS (9) =="
           python3 - "$DATA" << 'PYEOF'
-          import sys, struct, glob, os
+          import sys, os, struct
 
           data_dir = sys.argv[1]
           REQUIRED = ['globalgamemanagers.assets', 'sharedassets0.assets', 'level0']
           VER = b'2022.3.62f3\x00'
 
-          def load_bundle(path):
-              with open(path, 'rb') as f:
-                  raw = f.read()
-              off = 0
-              if raw[:4] == b'RO3V':
-                  off = 24
-              return raw[off:], off
-
           fails = []
           retargeted = 0
           for name in REQUIRED:
               path = os.path.join(data_dir, name)
-              data, off = load_bundle(path)
-              if data[:7] != b'UnityFS':
-                  fails.append(f'{name}: no UnityFS magic (header offset {off})')
-                  continue
-              # platform byte follows the second version string in the archive header
+              with open(path, 'rb') as f:
+                  data = f.read()
+              # Unity serialized files: header contains the engine version string
+              # followed by the target platform id (int32 LE). AssetBundles use
+              # a single byte instead; accept both encodings.
               idx = data.find(VER)
               found = False
               while idx != -1:
                   p = idx + len(VER)
-                  if p < len(data):
-                      val = data[p]
-                      if val == 9:
+                  if p + 1 <= len(data):
+                      b1 = data[p]
+                      i32 = None
+                      if p + 4 <= len(data):
+                          i32 = struct.unpack('<i', data[p:p+4])[0]
+                      if i32 == 9 or b1 == 9:
                           retargeted += 1
                           found = True
+                          print(f'  {name}: platform id 9 (iOS) verified at offset 0x{p:X}')
                           break
-                      elif val == 19:
-                          fails.append(f'{name}: platform byte still 19 (Windows) - not retargeted')
+                      if i32 == 19 or b1 == 19:
+                          fails.append(f'{name}: platform id still 19 (Windows) - not retargeted')
                           found = True
                           break
                   idx = data.find(VER, idx + 1)
               if not found:
-                  # Some Unity variants omit the platform byte in the header scan range;
-                  # treat as warning unless another platform id is clearly present.
-                  print(f'  [warn] {name}: platform byte not found near Unity version string')
+                  print(f'  [warn] {name}: platform id not found near Unity version string')
 
           if fails:
               for m in fails:
                   print(f'  [error] {m}')
               sys.exit(1)
-          print(f'UnityFS magic OK; platform byte iOS(9) verified on {retargeted}/{len(REQUIRED)} core bundles')
+          print(f'Platform iOS(9) verified on {retargeted}/{len(REQUIRED)} core data files')
           PYEOF
 
           echo "== 5. Info.plist and assets =="
