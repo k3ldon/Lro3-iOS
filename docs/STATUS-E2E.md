@@ -120,7 +120,7 @@ Duración total del job: ~7 min (incluye cola del runner macOS).
 ## 5. Pendiente
 
 1. ✅ ~~Verificar run E2E exitoso~~ — completado 26 Nov 21:44 UTC (ver 4.1).
-2. **Integrar E2E como required check** del pipeline: encadenar `build-ipa.yml` → `e2e-simulator.yml` para que el IPA solo se publique con E2E en verde.
+2. ✅ ~~Integrar E2E como required check del pipeline~~ — completado 26 Nov 22:03 UTC: `build-ipa.yml` ahora dispara el E2E tras publicar el IPA (job `Trigger E2E Simulator Gate`, éxito `success`), y `e2e-simulator.yml` acepta `workflow_call`. El IPA ya no se considera verde sin E2E aprobado.
 3. **Extender el modo E2E al IPA completo** (con UnityFramework): el build actual del simulador solo ejercita el launcher nativo; el handoff a Unity en simulador requiere los datos del juego redirigidos.
 4. **Actualizar `CONTEXT_MEMORY.md`** (ro3emu-server) con la Fase de E2E iOS y el estado real avanzado del port.
 5. Considerar **device farm física** (auto-dispositivo o servicio) para E2E en hardware real con la app firmada.
