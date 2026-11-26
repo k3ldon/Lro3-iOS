@@ -91,6 +91,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
 @end
 
 @interface AppDelegate (E2E)
+- (void)e2eLog:(NSString *)step;
 - (void)e2eLog:(NSString *)step detail:(NSString *)detail;
 - (void)e2eFail:(NSString *)reason;
 - (void)e2eSequenceStep:(NSInteger)step;
@@ -392,6 +393,10 @@ static UnityFramework* UnityFrameworkLoad(void) {
 }
 
 #pragma mark - E2E Automated Sequence
+
+- (void)e2eLog:(NSString *)step {
+    NSLog(@"[E2E] step=%@", step);
+}
 
 - (void)e2eLog:(NSString *)step detail:(NSString *)detail {
     NSLog(@"[E2E] step=%@%@", step, detail ? [NSString stringWithFormat:@" detail=%@", detail] : @"");
