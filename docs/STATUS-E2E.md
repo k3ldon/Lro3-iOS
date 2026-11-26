@@ -121,8 +121,16 @@ Duración total del job: ~7 min (incluye cola del runner macOS).
 
 1. ✅ ~~Verificar run E2E exitoso~~ — completado 26 Nov 21:44 UTC (ver 4.1).
 2. ✅ ~~Integrar E2E como required check del pipeline~~ — completado 26 Nov 22:03 UTC: `build-ipa.yml` ahora dispara el E2E tras publicar el IPA (job `Trigger E2E Simulator Gate`, éxito `success`), y `e2e-simulator.yml` acepta `workflow_call`. El IPA ya no se considera verde sin E2E aprobado.
-3. **Extender el modo E2E al IPA completo** (con UnityFramework): el build actual del simulador solo ejercita el launcher nativo; el handoff a Unity en simulador requiere los datos del juego redirigidos.
-4. **Actualizar `CONTEXT_MEMORY.md`** (ro3emu-server) con la Fase de E2E iOS y el estado real avanzado del port.
+3. ✅ ~~Extender el E2E al IPA completo~~ — completado 26 Nov 22:31 UTC: nueva validación estructural **dentro de `build-ipa.yml`** (paso "E2E Structural Validation of IPA") que desempaqueta el IPA real y verifica:
+   - Launcher `LagnarokRO3` presente y **arm64** (`lipo -info`).
+   - `UnityFramework.framework/UnityFramework` presente y **arm64**.
+   - `Data/globalgamemanagers.assets`, `Data/sharedassets0.assets` y `Data/level0` presentes.
+   - **Plataforma iOS (id 9) verificada byte a byte** en los 3 archivos de datos core (offset 0x3C, tras la cadena de versión `2022.3.62f3\0`) — confirmación E2E de que el retargeting Windows→iOS del export Xcode está activo en el IPA final, y rechazo explícito si el id sigue siendo 19 (Windows).
+   - `Info.plist` válido (`plutil -lint`), assets del launcher (`bg.jpg`, `logo-hero.png`) empaquetados.
+   - Load commands Mach-O: `platform IOS`, `minos 14.0` (`vtool -show-build`).
+   - El IPA ya no se sube como artifact sin pasar esta validación.
+   - Nota técnica: los `Data/*.assets` del build Unity son *serialized files* (el id de plataforma es int32 junto a la cadena de versión), no AssetBundles `UnityFS` con magic; el check inicial falló por asumir `UnityFS` y se corrigió tras inspección.
+4. ✅ ~~Actualizar `CONTEXT_MEMORY.md`~~ — Fase 103 añadida.
 5. Considerar **device farm física** (auto-dispositivo o servicio) para E2E en hardware real con la app firmada.
 
 ---
