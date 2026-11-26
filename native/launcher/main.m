@@ -90,6 +90,14 @@ static UnityFramework* UnityFrameworkLoad(void) {
 @property (strong, nonatomic) UIImpactFeedbackGenerator *hapticFeedback;
 @end
 
+@interface AppDelegate (E2E)
+- (void)e2eLog:(NSString *)step detail:(NSString *)detail;
+- (void)e2eFail:(NSString *)reason;
+- (void)e2eSequenceStep:(NSInteger)step;
+- (void)e2eAllPass;
+- (void)waitForCondition:(NSTimeInterval)timeout poll:(NSTimeInterval)poll condition:(BOOL (^)(void))condition onTimeout:(void (^)(void))onTimeout onComplete:(void (^)(void))onComplete;
+@end
+
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
@@ -451,7 +459,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
                     return;
                 }
             }
-            [self e2eLog:@"ui-labels-verified" detail:required componentsJoinedByString:@","];
+            [self e2eLog:@"ui-labels-verified" detail:[required componentsJoinedByString:@","]];
             [self e2eSequenceStep:1];
             break;
         }
@@ -530,7 +538,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
             [self startVerification];
             __weak typeof(self) weakSelf = self;
             [self waitForCondition:10.0 poll:0.3 condition:^BOOL {
-                return [[weakSelf.statusStageLabel.text ?: @"" rangeOfString:@"Verificada"].location != NSNotFound];
+                return [(weakSelf.statusStageLabel.text ?: @"") rangeOfString:@"Verificada"].location != NSNotFound;
             } onTimeout:^{
                 [weakSelf e2eFail:@"verification-timeout"];
             } onComplete:^{
