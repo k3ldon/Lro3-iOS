@@ -23,51 +23,24 @@ public class Launcher : MonoBehaviour
         yield return null;
         Debug.Log("[Launcher] Beginning scene transition to GameMain...");
 
-        AsyncOperation op = null;
-        try
+        string vfs = Path.Combine(Paths.StreamingAssets(), "VFS");
+        string gameMainBundlePath = Path.Combine(vfs, "ce70de479620a022.bundle");
+        if (!File.Exists(gameMainBundlePath))
         {
-            Debug.Log("[Launcher] Attempting SceneManager.LoadSceneAsync('GameMain')...");
-            op = SceneManager.LoadSceneAsync("GameMain");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning("[Launcher] SceneManager.LoadSceneAsync('GameMain') exception: " + ex.Message);
+            gameMainBundlePath = Path.Combine(vfs, "ce", "ce70de479620a022.bundle");
         }
 
-        if (op != null)
+        Debug.Log("[Launcher] Loading GameMain scene bundle: " + gameMainBundlePath);
+        var sceneBundle = Bundles.LoadFromFile(gameMainBundlePath);
+        if (sceneBundle != null)
         {
-            while (!op.isDone)
-            {
-                Debug.Log($"[Launcher] Loading GameMain progress: {op.progress:P0}");
-                yield return new WaitForSeconds(0.5f);
-            }
-            Debug.Log("[Launcher] GameMain scene loaded successfully!");
+            var scenePaths = sceneBundle.GetAllScenePaths();
+            string sceneToLoad = scenePaths.Length > 0 ? scenePaths[0] : "GameMainLancher";
+            Debug.Log($"[Launcher] Scene bundle loaded! Loading scene: '{sceneToLoad}'...");
+            SceneManager.LoadScene(sceneToLoad);
             yield break;
         }
 
-        // Search for GameMain bundle in VFS
-        string vfs = Path.Combine(Paths.StreamingAssets(), "VFS");
-        Debug.Log("[Launcher] Searching VFS for GameMain bundles in: " + vfs);
-        
-        string[] candidates = new[] { "gamemain.unity", "Assets/Scenes/GameMain.unity", "GameMain" };
-        foreach (var c in candidates)
-        {
-            ulong h = Ro3Ios.Shell.Ro3Startup.HashString(c);
-            string rel = h.ToString("x16").Substring(0, 2) + "/" + h.ToString("x") + ".bundle";
-            string p = Path.Combine(vfs, rel);
-            if (File.Exists(p))
-            {
-                Debug.Log($"[Launcher] Found GameMain bundle for '{c}' at: {p}");
-                var b = Bundles.LoadFromFile(p);
-                if (b != null)
-                {
-                    Debug.Log("[Launcher] Loaded GameMain bundle! Scenes in bundle: " + string.Join(", ", b.GetAllScenePaths()));
-                    SceneManager.LoadScene(Path.GetFileNameWithoutExtension(b.GetAllScenePaths()[0]));
-                    yield break;
-                }
-            }
-        }
-
-        Debug.LogWarning("[Launcher] GameMain bundle not found by simple hash, inspecting VFS bundles...");
+        Debug.LogError("[Launcher] Failed to load GameMain scene bundle at: " + gameMainBundlePath);
     }
 }

@@ -70,17 +70,24 @@ public static class Bundles
     private static bool RetargetBundle(string srcPath, ulong offset, string dstPath)
     {
         if (!File.Exists(srcPath)) return false;
-        byte[] data;
-        if (offset == 0)
+        byte[] raw = File.ReadAllBytes(srcPath);
+
+        int actualOffset = (int)offset;
+        if (raw.Length >= 24 && raw[0] == 'R' && raw[1] == 'O' && raw[2] == '3' && raw[3] == 'V')
         {
-            data = File.ReadAllBytes(srcPath);
+            actualOffset = 24;
+            Debug.Log($"[Ro3Ios.Bundles] Stripped RO3V header from {Path.GetFileName(srcPath)} (24 bytes)");
+        }
+
+        byte[] data;
+        if (actualOffset == 0)
+        {
+            data = raw;
         }
         else
         {
-            using var fs = new FileStream(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            fs.Seek((long)offset, SeekOrigin.Begin);
-            data = new byte[fs.Length - (long)offset];
-            fs.Read(data, 0, data.Length);
+            data = new byte[raw.Length - actualOffset];
+            Buffer.BlockCopy(raw, actualOffset, data, 0, data.Length);
         }
 
         if (data.Length < 32) return false;
