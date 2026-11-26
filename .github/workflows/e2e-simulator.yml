@@ -1,0 +1,186 @@
+name: E2E iOS Simulator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native/launcher/**'
+      - '.github/workflows/e2e-simulator.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-simulator:
+    name: Install and Run E2E on iOS Simulator
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || true
+          xcodebuild -version
+          xcrun simctl list runtimes | grep -E '^iOS'
+
+      - name: List Available Simulators
+        run: |
+          set -o pipefail
+          xcrun simctl list devices available | grep -E 'iPhone' | head -n 10
+
+      - name: Download Exported Xcode Project
+        run: |
+          gh release download v1.3.2-xcode -R k3ldon/Lro3-iOS -p xcode-project.tar.gz -O xcode-project.tar.gz
+          mkdir -p xcode
+          tar -xzf xcode-project.tar.gz -C xcode
+          ls xcode/ | head -n 10
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Launcher App for iOS Simulator
+        run: |
+          echo "== Building LagnarokRO3.app for simulator (arm64 x86_64 slices) =="
+          ISYSROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          mkdir -p build-app
+          clang -arch arm64 -arch x86_64 \
+            -isysroot $ISYSROOT \
+            -mios-simulator-version-min=14.0 \
+            -fobjc-arc \
+            -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore \
+            -framework UserNotifications \
+            -D TARGET_IPHONE_SIMULATOR=1 \
+            -Wl,-rpath,@executable_path/Frameworks \
+            native/launcher/main.m native/stubs/stubs_ios.c \
+            -o build-app/LagnarokRO3
+
+          mkdir -p "build-app/LagnarokRO3.app"
+          mv build-app/LagnarokRO3 "build-app/LagnarokRO3.app/LagnarokRO3"
+
+          echo "== Staging assets =="
+          mkdir -p "build-app/LagnarokRO3.app/assets"
+          cp native/launcher/assets/bg.jpg "build-app/LagnarokRO3.app/assets/"
+          cp native/launcher/assets/logo-hero.png "build-app/LagnarokRO3.app/assets/"
+
+          echo "== Writing Info.plist =="
+          cat << 'EOF' > "build-app/LagnarokRO3.app/Info.plist"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>LagnarokRO3</string>
+              <key>CFBundleIdentifier</key>
+              <string>online.lagnarok.ro3</string>
+              <key>CFBundleName</key>
+              <string>LagnarokRO3</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0.33</string>
+              <key>CFBundleVersion</key>
+              <string>33</string>
+              <key>CFBundleIconName</key>
+              <string>AppIcon</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>NSAppTransportSecurity</key>
+              <dict>
+                  <key>NSAllowsArbitraryLoads</key>
+                  <true/>
+              </dict>
+              <key>UILaunchStoryboardName</key>
+              <string>LaunchScreen</string>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+          plutil -lint "build-app/LagnarokRO3.app/Info.plist"
+
+          echo "== Validating Mach-O and minimum OS =="
+          file "build-app/LagnarokRO3.app/LagnarokRO3"
+          vtool -show-build "build-app/LagnarokRO3.app/LagnarokRO3" 2>/dev/null | grep -E 'platform|minos' || true
+          ls -la "build-app/LagnarokRO3.app/"
+
+      - name: Boot iPhone Simulator
+        id: sim
+        run: |
+          set -o pipefail
+          # Prefer an iPhone running the newest available iOS runtime
+          DEVICE_JSON=$(xcrun simctl list devices available --json)
+          DEVICE=$(echo "$DEVICE_JSON" | jq -r '
+            [.devices[][].name] as $names
+            | .devices | to_entries
+            | map({runtime: .key, device: .value[]})
+            | sort_by(.runtime) | reverse
+            | .[0].device.udid')
+          if [ -z "$DEVICE" ] || [ "$DEVICE" = "null" ]; then
+            DEVICE=$(xcrun simctl list devices available | grep -E 'iPhone' | head -n 1 | grep -oE '[0-9A-F-]{36}$')
+          fi
+          echo "udid=$DEVICE" >> "$GITHUB_OUTPUT"
+          echo "Using simulator UDID: $DEVICE"
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          sleep 5
+
+      - name: Install App on Simulator
+        run: |
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "build-app/LagnarokRO3.app"
+          xcrun simctl launch --console-pty "${{ steps.sim.outputs.udid }}" online.lagnarok.ro3 -e2eAuto > e2e-console.log 2>&1 &
+          echo "launched"
+          sleep 3
+
+      - name: Capture Screenshot
+        run: |
+          xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot e2e-screenshot-launcher.png || true
+          ls -lh e2e-screenshot-launcher.png || true
+
+      - name: Run E2E Assertions on Logs
+        run: |
+          echo "== Waiting for E2E sequence to complete (up to 120 s) =="
+          for i in $(seq 1 120); do
+            if grep -q "ALL-PASS" e2e-console.log 2>/dev/null; then
+              echo "E2E ALL-PASS found after ${i}s"; break
+            fi
+            if grep -q "\[E2E\] FAIL" e2e-console.log 2>/dev/null; then
+              echo "E2E FAIL found after ${i}s"; break
+            fi
+            sleep 1
+          done
+
+          echo "== E2E log dump =="
+          cat e2e-console.log || true
+          echo "================"
+
+          FAIL=0
+          grep -q "ALL-PASS" e2e-console.log || { echo "::error::E2E did not reach ALL-PASS"; FAIL=1; }
+          ! grep -q "\[E2E\] FAIL" e2e-console.log || { echo "::error::E2E reported a FAIL step"; FAIL=1; }
+          for step in launched ui-labels-verified server-status-verified play-button-verified lang-en lang-pt lang-es news-alert-verified verification-verified; do
+            grep -q "step=$step" e2e-console.log || { echo "::error::missing step $step"; FAIL=1; }
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            exit 1
+          fi
+          echo "E2E: all assertions green."
+
+      - name: Upload E2E Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-simulator-logs
+          path: |
+            e2e-console.log
+            e2e-screenshot-launcher.png
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Shutdown Simulator
+        if: always()
+        run: |
+          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true

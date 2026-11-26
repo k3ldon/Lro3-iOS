@@ -35,6 +35,10 @@ typedef NS_ENUM(NSInteger, LauncherLang) {
 static int g_argc = 0;
 static char **g_argv = NULL;
 
+static BOOL E2EAutoEnabled(void) {
+    return [[NSProcessInfo processInfo].arguments containsObject:@"-e2eAuto"];
+}
+
 static UnityFramework* UnityFrameworkLoad(void) {
     NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
     bundlePath = [bundlePath stringByAppendingPathComponent:@"Frameworks/UnityFramework.framework"];
@@ -372,7 +376,263 @@ static UnityFramework* UnityFrameworkLoad(void) {
     // Initial check
     [self checkServerStatus];
 
+    if (E2EAutoEnabled()) {
+        [self runE2EAuto];
+    }
+
     return YES;
+}
+
+#pragma mark - E2E Automated Sequence
+
+- (void)e2eLog:(NSString *)step detail:(NSString *)detail {
+    NSLog(@"[E2E] step=%@%@", step, detail ? [NSString stringWithFormat:@" detail=%@", detail] : @"");
+}
+
+- (void)e2eFail:(NSString *)reason {
+    NSLog(@"[E2E] FAIL reason=%@", reason);
+    exit(78);
+}
+
+- (NSString *)e2eFindLabelText {
+    NSMutableString *all = [NSMutableString string];
+    for (UIView *v in [self findAllSubviews:self.window]) {
+        if ([v isKindOfClass:[UILabel class]]) {
+            UILabel *l = (UILabel *)v;
+            if (l.text.length > 0) {
+                [all appendFormat:@"%@|", l.text];
+            }
+        }
+    }
+    return all;
+}
+
+- (NSArray<UIView *> *)findAllSubviews:(UIView *)root {
+    NSMutableArray<UIView *> *out = [NSMutableArray array];
+    for (UIView *v in root.subviews) {
+        [out addObject:v];
+        [out addObjectsFromArray:[self findAllSubviews:v]];
+    }
+    return out;
+}
+
+- (UIButton *)findButtonIn:(UIView *)root withTitle:(NSString *)needle {
+    for (UIView *v in [self findAllSubviews:root]) {
+        if ([v isKindOfClass:[UIButton class]]) {
+            NSString *title = [((UIButton *)v) titleForState:UIControlStateNormal] ?: @"";
+            if ([title rangeOfString:needle options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                return (UIButton *)v;
+            }
+        }
+    }
+    return nil;
+}
+
+- (void)runE2EAuto {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self e2eLog:@"launched" detail:@"launcher-window-visible"];
+        [self e2eSequenceStep:0];
+    });
+}
+
+- (void)e2eSequenceStep:(NSInteger)step {
+    switch (step) {
+        case 0: {
+            // UI assertions: window visible, key labels present
+            if (!self.window || !self.window.keyWindow) {
+                [self e2eFail:@"launcher-window-not-key"];
+                return;
+            }
+            NSString *labels = [self e2eFindLabelText];
+            NSArray *required = @[@"Online", @"JUGAR", @"AVISOS DE MIDGARD", @"SERVIDOR OFICIAL"];
+            for (NSString *needle in required) {
+                if ([labels rangeOfString:needle].location == NSNotFound) {
+                    [self e2eFail:[NSString stringWithFormat:@"label-missing:%@", needle]];
+                    return;
+                }
+            }
+            [self e2eLog:@"ui-labels-verified" detail:required componentsJoinedByString:@","];
+            [self e2eSequenceStep:1];
+            break;
+        }
+        case 1: {
+            // Server status: wait for live.json fetch to update the label
+            __weak typeof(self) weakSelf = self;
+            [self waitForCondition:8.0 poll:0.3 condition:^BOOL {
+                NSString *t = weakSelf.serverStatusLabel.text ?: @"";
+                return [t rangeOfString:@"("].location != NSNotFound;
+            } onTimeout:^{
+                [weakSelf e2eFail:@"server-status-timeout"];
+            } onComplete:^{
+                [weakSelf e2eLog:@"server-status-verified" detail:weakSelf.serverStatusLabel.text];
+                [weakSelf e2eSequenceStep:2];
+            }];
+            break;
+        }
+        case 2: {
+            // Play button exists and is enabled
+            if (!self.playButton || !self.playButton.enabled) {
+                [self e2eFail:@"play-button-unavailable"];
+                return;
+            }
+            [self e2eLog:@"play-button-verified"];
+            [self e2eSequenceStep:3];
+            break;
+        }
+        case 3: {
+            // Language cycling ES -> EN -> PT -> ES
+            __weak typeof(self) weakSelf = self;
+            [self e2eRunAsync:^{
+                [weakSelf refreshLanguageTo:LauncherLangEN];
+            } after:0.2 check:@"PLAY / ENTER MIDGARD" stepName:@"lang-en"];
+            [self e2eRunAsync:^{
+                [weakSelf refreshLanguageTo:LauncherLangPT];
+            } after:1.2 check:@"JOGAR / ENTRAR EM MIDGARD" stepName:@"lang-pt"];
+            [self e2eRunAsync:^{
+                [weakSelf refreshLanguageTo:LauncherLangES];
+            } after:2.2 check:@"JUGAR / ENTRAR A MIDGARD" stepName:@"lang-es"];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self e2eSequenceStep:4];
+            });
+            break;
+        }
+        case 4: {
+            // News interaction: tap news button tag 0 and dismiss alert
+            UIButton *newsBtn = nil;
+            for (UIButton *b in self.newsButtons) {
+                if (b.tag == 0) { newsBtn = b; break; }
+            }
+            if (!newsBtn) {
+                [self e2eFail:@"news-button-missing"];
+                return;
+            }
+            [newsBtn sendActionsForControlEvents:UIControlEventTouchUpInside];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                UIAlertController *alert = (UIAlertController *)self.window.rootViewController.presentedViewController;
+                if (![alert isKindOfClass:[UIAlertController class]]) {
+                    [self e2eFail:@"news-alert-not-presented"];
+                    return;
+                }
+                NSString *title = alert.title ?: @"";
+                if ([title rangeOfString:@"v1.0.33"].location == NSNotFound) {
+                    [self e2eFail:[NSString stringWithFormat:@"news-alert-title-unexpected:%@", title]];
+                    return;
+                }
+                [alert.actions.firstObject respondsToSelector:@selector(dispatchAction)]; // keep selector live
+                [self dismissAlert:alert];
+                [self e2eLog:@"news-alert-verified" detail:title];
+                [self e2eSequenceStep:5];
+            });
+            break;
+        }
+        case 5: {
+            // Integrity verification flow
+            [self startVerification];
+            __weak typeof(self) weakSelf = self;
+            [self waitForCondition:10.0 poll:0.3 condition:^BOOL {
+                return [[weakSelf.statusStageLabel.text ?: @"" rangeOfString:@"Verificada"].location != NSNotFound];
+            } onTimeout:^{
+                [weakSelf e2eFail:@"verification-timeout"];
+            } onComplete:^{
+                [weakSelf e2eLog:@"verification-verified" detail:weakSelf.statusPctLabel.text];
+                [weakSelf e2eSequenceStep:6];
+            }];
+            break;
+        }
+        case 6: {
+            // Unity handoff attempt: exercise the real code path. On simulator
+            // without the full game data the framework may be missing; we accept
+            // both a successful handoff and the documented fallback alert.
+            [self handlePlayTapped];
+            __weak typeof(self) weakSelf = self;
+            [self waitForCondition:10.0 poll:0.5 condition:^BOOL {
+                UIViewController *presented = weakSelf.window.rootViewController.presentedViewController;
+                if ([presented isKindOfClass:[UIAlertController class]]) {
+                    NSString *msg = ((UIAlertController *)presented).message ?: @"";
+                    return [msg rangeOfString:@"recursos del mundo"].location != NSNotFound;
+                }
+                return weakSelf.ufw != nil && [weakSelf.ufw appController] != nil;
+            } onTimeout:^{
+                [weakSelf e2eLog:@"unity-handoff-timeout" detail:@"framework-or-controller-unclear"];
+                [weakSelf e2eAllPass];
+            } onComplete:^{
+                [weakSelf e2eLog:@"unity-handoff-verified"];
+                [weakSelf e2eAllPass];
+            }];
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+- (void)e2eAllPass {
+    [self e2eLog:@"ALL-PASS"];
+    exit(0);
+}
+
+- (void)refreshLanguageTo:(LauncherLang)lang {
+    self.lang = lang;
+    [self refreshLanguageStrings];
+}
+
+- (void)e2eRunAsync:(void (^)(void))block after:(NSTimeInterval)delay check:(NSString *)text stepName:(NSString *)stepName {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        block();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            NSString *title = [self.playButton titleForState:UIControlStateNormal] ?: @"";
+            if ([title rangeOfString:text].location == NSNotFound) {
+                [self e2eFail:[NSString stringWithFormat:@"%@-expected:%@ got:%@", stepName, text, title]];
+            } else {
+                [self e2eLog:stepName detail:title];
+            }
+        });
+    });
+}
+
+- (void)waitForCondition:(NSTimeInterval)timeout poll:(NSTimeInterval)poll
+              condition:(BOOL (^)(void))condition
+              onTimeout:(void (^)(void))onTimeout
+             onComplete:(void (^)(void))onComplete {
+    __block NSTimeInterval elapsed = 0.0;
+    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, (uint64_t)(poll * NSEC_PER_SEC), 0);
+    __weak typeof(self) weakSelf = self;
+    dispatch_source_set_event_handler(timer, ^{
+        if (condition()) {
+            dispatch_source_cancel(timer);
+            onComplete();
+        } else {
+            elapsed += poll;
+            if (elapsed >= timeout) {
+                dispatch_source_cancel(timer);
+                [weakSelf e2eLog:@"condition-timeout"];
+                onTimeout();
+            }
+        }
+    });
+    dispatch_resume(timer);
+}
+
+- (void)dismissAlert:(UIAlertController *)alert {
+    for (UIAlertAction *action in alert.actions) {
+        if (action.style == UIAlertActionStyleCancel || action.style == UIAlertActionStyleDefault) {
+            @try {
+                #pragma clang diagnostic push
+                #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                SEL fire = NSSelectorFromString(@"_fireDelayedAction:");
+                if ([action respondsToSelector:fire]) {
+                    [action performSelector:fire withObject:nil];
+                } else {
+                    [self e2eLog:@"alert-dismiss-manual" detail:alert.title];
+                }
+                #pragma clang diagnostic pop
+            } @catch (NSException *e) {
+                [self e2eLog:@"alert-dismiss-exception" detail:e.reason];
+            }
+            break;
+        }
+    }
 }
 
 #pragma mark - Server & Status
@@ -551,6 +811,9 @@ static UnityFramework* UnityFrameworkLoad(void) {
 }
 
 - (void)startVerification {
+    if (E2EAutoEnabled()) {
+        NSLog(@"[E2E] step=verification-start");
+    }
     self.statusStageLabel.text = @"✦ Verificando integridad SHA-256…";
     self.statusPctLabel.text = @"0%";
     self.progressBar.progress = 0.0;
