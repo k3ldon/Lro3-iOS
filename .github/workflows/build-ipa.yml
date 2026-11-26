@@ -92,3 +92,21 @@ jobs:
           name: Lro3-iOS-IPA
           path: Lro3-iOS.ipa
           retention-days: 14
+
+  trigger-e2e:
+    name: Trigger E2E Simulator Gate
+    needs: build-ipa
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run E2E workflow and wait
+        run: |
+          echo "IPA built. Running E2E simulator gate..."
+          gh workflow run "E2E iOS Simulator" -R k3ldon/Lro3-iOS --ref main
+          sleep 20
+          RUN_ID=$(gh run list -R k3ldon/Lro3-iOS --workflow 'E2E iOS Simulator' --limit 1 --json databaseId --jq '.[0].databaseId')
+          echo "Watching E2E run $RUN_ID"
+          gh run watch "$RUN_ID" -R k3ldon/Lro3-iOS --exit-status --interval 15
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
