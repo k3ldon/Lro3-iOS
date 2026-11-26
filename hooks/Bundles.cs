@@ -94,11 +94,11 @@ public static class Bundles
         string signature = ReadNullTerminatedAscii(data, 0);
         if (signature != "UnityFS") return false;
 
-        // Scan for Unity version string "2022.3.62f3\0" followed by target platform 19 (StandaloneWindows64)
+        // Scan for Unity version string "2022.3.62f3\0" followed by target platform byte 19 (StandaloneWindows64)
         // and retarget it to 9 (iOS)
         byte[] verBytes = Encoding.ASCII.GetBytes("2022.3.62f3\0");
         bool patched = false;
-        for (int i = 0; i < data.Length - verBytes.Length - 8; i++)
+        for (int i = 0; i < data.Length - verBytes.Length - 1; i++)
         {
             bool match = true;
             for (int j = 0; j < verBytes.Length; j++)
@@ -108,15 +108,11 @@ public static class Bundles
             if (match)
             {
                 int platformOffset = i + verBytes.Length;
-                int platform = BitConverter.ToInt32(data, platformOffset);
-                if (platform == 19) // StandaloneWindows64
+                if (data[platformOffset] == 19) // StandaloneWindows64
                 {
                     data[platformOffset] = (byte)TargetPlatformIos; // 9 = iOS
-                    data[platformOffset + 1] = 0;
-                    data[platformOffset + 2] = 0;
-                    data[platformOffset + 3] = 0;
                     patched = true;
-                    Debug.Log($"[Ro3Ios.Bundles] Retargeted {Path.GetFileName(srcPath)} from platform {platform} to {TargetPlatformIos} (offset 0x{platformOffset:X})");
+                    Debug.Log($"[Ro3Ios.Bundles] Retargeted {Path.GetFileName(srcPath)} platform byte 19 -> {TargetPlatformIos} at offset 0x{platformOffset:X}");
                 }
             }
         }
