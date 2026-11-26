@@ -115,37 +115,64 @@ jobs:
             ls -la "$APP_DIR/Frameworks/" 2>/dev/null || echo "no Frameworks dir"
           fi
 
-          echo "== 3. Game Data folder with UnityFS bundles =="
+          echo "== 3. Game Data folder with UnityFS bundles (RO3V 24-byte header tolerated) =="
           DATA="$APP_DIR/Data"
           [ -d "$DATA" ] || fail "Data folder missing"
           for f in globalgamemanagers.assets sharedassets0.assets level0; do
             [ -f "$DATA/$f" ] || fail "Data/$f missing"
           done
-          for f in globalgamemanagers.assets sharedassets0.assets level0; do
-            head -c 7 "$DATA/$f" | grep -q "UnityFS" || fail "Data/$f is not UnityFS"
-          done
-          echo "UnityFS magic verified on core bundles."
+          echo "Core Data files present."
 
-          echo "== 4. Bundle platform retargeted to iOS (9) =="
+          echo "== 4. UnityFS magic and platform byte retargeted to iOS (9) =="
           python3 - "$DATA" << 'PYEOF'
           import sys, struct, glob, os
+
           data_dir = sys.argv[1]
-          bad, checked = [], 0
-          for path in sorted(glob.glob(os.path.join(data_dir, 'sharedassets*.assets')) +
-                            glob.glob(os.path.join(data_dir, 'level*')) +
-                            [os.path.join(data_dir, 'globalgamemanagers.assets')]):
-              if not os.path.isfile(path) or not path.endswith(('.assets',)) and 'level' not in os.path.basename(path):
-                  continue
+          REQUIRED = ['globalgamemanagers.assets', 'sharedassets0.assets', 'level0']
+          VER = b'2022.3.62f3\x00'
+
+          def load_bundle(path):
               with open(path, 'rb') as f:
-                  head = f.read(0x200)
-              if head[:7] != b'UnityFS':
+                  raw = f.read()
+              off = 0
+              if raw[:4] == b'RO3V':
+                  off = 24
+              return raw[off:], off
+
+          fails = []
+          retargeted = 0
+          for name in REQUIRED:
+              path = os.path.join(data_dir, name)
+              data, off = load_bundle(path)
+              if data[:7] != b'UnityFS':
+                  fails.append(f'{name}: no UnityFS magic (header offset {off})')
                   continue
-              checked += 1
-              # UnityFS: magic(8) ver(4) verstr unityver+cstr revstr+cstr size(8) ciflags(4) ciflags(4)
-              # then block info; platform lives in the archive header block after decompression in
-              # compressed variants. Fallback heuristic: search for platform id 9 vs 19 in raw head
-              # is unreliable, so we only flag Windows-id bundles when the header is uncompressed.
-          print(f"UnityFS bundles checked: {checked}")
+              # platform byte follows the second version string in the archive header
+              idx = data.find(VER)
+              found = False
+              while idx != -1:
+                  p = idx + len(VER)
+                  if p < len(data):
+                      val = data[p]
+                      if val == 9:
+                          retargeted += 1
+                          found = True
+                          break
+                      elif val == 19:
+                          fails.append(f'{name}: platform byte still 19 (Windows) - not retargeted')
+                          found = True
+                          break
+                  idx = data.find(VER, idx + 1)
+              if not found:
+                  # Some Unity variants omit the platform byte in the header scan range;
+                  # treat as warning unless another platform id is clearly present.
+                  print(f'  [warn] {name}: platform byte not found near Unity version string')
+
+          if fails:
+              for m in fails:
+                  print(f'  [error] {m}')
+              sys.exit(1)
+          print(f'UnityFS magic OK; platform byte iOS(9) verified on {retargeted}/{len(REQUIRED)} core bundles')
           PYEOF
 
           echo "== 5. Info.plist and assets =="
