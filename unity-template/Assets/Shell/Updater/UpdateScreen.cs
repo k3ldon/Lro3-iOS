@@ -195,6 +195,7 @@ namespace Ro3Ios.Updater
         {
             UnityHttpDispatcher.ProcessQueue(this);
             if (_installer == null) return;
+            if (_offlinePlayable) { Trace("auto-start: data complete"); _view = View.Done; }
             if (_view == View.Done) Finish();
         }
 
@@ -340,7 +341,6 @@ namespace Ro3Ios.Updater
                         }
                     }
                     y += 16 * scale;
-                    if (_offlinePlayable && Button(ref y, x, w, scale, "Iniciar juego directamente")) _view = View.Done;
                     break;
                 case View.Confirm:
                     Line(ref y, x, w, scale, $"Es necesario descargar {Installer.Format(_plan.DownloadBytes)} ({_plan.Install.Count} archivos).", _text);
@@ -355,7 +355,6 @@ namespace Ro3Ios.Updater
                 case View.Error:
                     Line(ref y, x, w, scale, _error, _text);
                     if (Button(ref y, x, w, scale, "Reintentar")) Begin();
-                    if (_offlinePlayable && Button(ref y, x, w, scale, "Jugar sin conexión")) _view = View.Done;
                     if (Button(ref y, x, w, scale, "Verificar todos los archivos")) { _verifyAll = true; Begin(); }
                     break;
             }
