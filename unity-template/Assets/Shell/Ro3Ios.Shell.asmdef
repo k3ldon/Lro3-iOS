@@ -2,7 +2,8 @@
   "name": "Ro3Ios.Shell",
   "rootNamespace": "Ro3Ios.Shell",
   "references": [
-    "Ro3Ios.Hooks"
+    "Ro3Ios.Hooks",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [
     "iOS",

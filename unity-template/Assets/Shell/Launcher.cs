@@ -28,6 +28,9 @@ public class Launcher : MonoBehaviour
         }
     }
 
+    private static readonly Type GraphicType = Type.GetType("UnityEngine.UI.Graphic, UnityEngine.UI");
+    private static readonly System.Reflection.PropertyInfo GraphicMatProp = GraphicType?.GetProperty("material");
+
     private static void FixShadersRecursive(GameObject go, Shader fallback)
     {
         if (go == null) return;
@@ -42,11 +45,14 @@ public class Launcher : MonoBehaviour
                 }
             }
         }
-        foreach (var g in go.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+        if (GraphicType != null && GraphicMatProp != null)
         {
-            if (g.material != null && g.material.shader != null && (!g.material.shader.isSupported || g.material.shader.name == "Hidden/InternalErrorShader"))
+            foreach (var g in go.GetComponentsInChildren(GraphicType, true))
             {
-                g.material.shader = fallback;
+                if (GraphicMatProp.GetValue(g) is Material mat && mat.shader != null && (!mat.shader.isSupported || mat.shader.name == "Hidden/InternalErrorShader"))
+                {
+                    mat.shader = fallback;
+                }
             }
         }
     }
