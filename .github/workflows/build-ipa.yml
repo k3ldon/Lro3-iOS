@@ -53,6 +53,7 @@ jobs:
       - name: Tar and Upload Xcode Project Artifact
         if: success()
         run: |
+          sudo chown -R $(id -u):$(id -g) build
           if [ -d "build/iOS/xcode" ] && [ -f "build/iOS/xcode/Unity-iPhone.xcodeproj/project.pbxproj" ]; then
             cd build/iOS
             tar -czf xcode-project.tar.gz xcode/
