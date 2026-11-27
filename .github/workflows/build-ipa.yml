@@ -115,7 +115,20 @@ jobs:
           echo "Created xcode/Libraries/libPlugins.a"
 
           echo "== Patching UnityFramework other linker flags to link libPlugins.a and sqlite3 =="
-          sed -i '' 's/-lGameAssembly/-lGameAssembly -lPlugins -lsqlite3/g' xcode/Unity-iPhone.xcodeproj/project.pbxproj || true
+          python3 - << 'PYEOF'
+          path = 'xcode/Unity-iPhone.xcodeproj/project.pbxproj'
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+          target = '"$(OTHER_LDFLAGS_FRAMEWORK)",'
+          replacement = '"$(OTHER_LDFLAGS_FRAMEWORK)",\n\t\t\t\t\t"-lPlugins",\n\t\t\t\t\t"-lsqlite3",'
+          if target in content:
+              content = content.replace(target, replacement)
+              with open(path, 'w', encoding='utf-8') as f:
+                  f.write(content)
+              print("Successfully injected -lPlugins and -lsqlite3 into UnityFramework OTHER_LDFLAGS")
+          else:
+              print("WARNING: target not found in project.pbxproj")
+          PYEOF
 
           cd xcode
           mkdir -p Il2CppOutputProject/Source/il2cppOutput
