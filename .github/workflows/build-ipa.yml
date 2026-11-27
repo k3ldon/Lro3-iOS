@@ -14,18 +14,88 @@ on:
         default: '1.0.0'
 
 jobs:
+  export-xcode:
+    name: Unity GameCI Export Xcode Project
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: unity-template/Library
+          key: Library-iOS-${{ hashFiles('unity-template/**') }}
+          restore-keys: |
+            Library-iOS-
+
+      - name: Unity Builder (Export iOS Project with Game Assemblies)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          targetPlatform: iOS
+          unityVersion: 2022.3.62f3
+          projectPath: unity-template
+          buildName: Lro3-Xcode
+          buildsPath: build
+          buildMethod: Ro3Ios.Editor.BuildIos.Build
+          customParameters: -ro3Out /github/workspace/build/iOS/xcode -ro3Version ${{ github.event.inputs.version || '1.0.0' }}
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Tar and Upload Xcode Project Artifact
+        if: success()
+        run: |
+          if [ -d "build/iOS/xcode" ] && [ -f "build/iOS/xcode/Unity-iPhone.xcodeproj/project.pbxproj" ]; then
+            cd build/iOS
+            tar -czf xcode-project.tar.gz xcode/
+            mkdir -p /tmp/export-art
+            mv xcode-project.tar.gz /tmp/export-art/
+          fi
+
+      - name: Upload Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-project-generated
+          path: /tmp/export-art/xcode-project.tar.gz
+          retention-days: 3
+          if-no-files-found: ignore
+
   build-ipa:
     name: Build IPA with Xcode
+    needs: [ export-xcode ]
     runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download Exported Xcode Project
+      - name: Download Generated Xcode Project
+        id: dl-gen
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: xcode-project-generated
+          path: .
+
+      - name: Extract Project or Fallback to Release
         run: |
-          gh release download v1.3.2-xcode -R k3ldon/Lro3-iOS -p xcode-project.tar.gz -O xcode-project.tar.gz
-          mkdir -p xcode
-          tar -xzf xcode-project.tar.gz -C xcode
+          if [ -f "xcode-project.tar.gz" ]; then
+            echo "== Using freshly generated Xcode project from GameCI =="
+            tar -xzf xcode-project.tar.gz
+          else
+            echo "== Falling back to release v1.3.2-xcode =="
+            gh release download v1.3.2-xcode -R k3ldon/Lro3-iOS -p xcode-project.tar.gz -O xcode-project.tar.gz
+            mkdir -p xcode
+            tar -xzf xcode-project.tar.gz -C xcode
+          fi
           ls xcode/ | head -n 10
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

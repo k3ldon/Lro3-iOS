@@ -2,4 +2,21 @@
   <assembly fullname="Ro3Ios.Shell" preserve="all"/>
   <assembly fullname="Ro3Ios.Hooks" preserve="all"/>
   <assembly fullname="ZstdSharp" preserve="all"/>
+  <assembly fullname="Assembly-CSharp" preserve="all"/>
+  <assembly fullname="Cinemachine" preserve="all"/>
+  <assembly fullname="Happyengine.Base.Runtime" preserve="all"/>
+  <assembly fullname="HappyEngine.Resource" preserve="all"/>
+  <assembly fullname="HappyEngine.CustomAssetFormat" preserve="all"/>
+  <assembly fullname="HappyEngine.CustomFormat" preserve="all"/>
+  <assembly fullname="HappyEngine.CustomScene" preserve="all"/>
+  <assembly fullname="HappyEngine.GameSDKProxy" preserve="all"/>
+  <assembly fullname="HappyEngine.GPUDrivenTerrain.Runtime" preserve="all"/>
+  <assembly fullname="HappyEngine.LitJson" preserve="all"/>
+  <assembly fullname="HappyEngine.LuaHotfix" preserve="all"/>
+  <assembly fullname="Happyengine.Network" preserve="all"/>
+  <assembly fullname="Happyengine.UI.Framework" preserve="all"/>
+  <assembly fullname="Happyengine.WorldStream.Runtime" preserve="all"/>
+  <assembly fullname="Ro3Emu.ClientHooks" preserve="all"/>
+  <assembly fullname="Ro3Emu.Loc" preserve="all"/>
+  <assembly fullname="UnityEngine.UI" preserve="all"/>
 </linker>

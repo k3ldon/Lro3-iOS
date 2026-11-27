@@ -10,6 +10,45 @@ public class Launcher : MonoBehaviour
     private void Awake()
     {
         Debug.Log("[Launcher] Awake executed!");
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        Debug.Log($"[Launcher] Scene '{scene.name}' loaded! Performing Metal shader sweep...");
+        Shader fallback = Shader.Find("Hidden/Ro3Ios/Fallback") ?? Shader.Find("UI/Default");
+        foreach (var root in scene.GetRootGameObjects())
+        {
+            FixShadersRecursive(root, fallback);
+        }
+    }
+
+    private static void FixShadersRecursive(GameObject go, Shader fallback)
+    {
+        if (go == null) return;
+        foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+        {
+            if (r.sharedMaterials == null) continue;
+            foreach (var m in r.sharedMaterials)
+            {
+                if (m != null && m.shader != null && (!m.shader.isSupported || m.shader.name == "Hidden/InternalErrorShader"))
+                {
+                    m.shader = fallback;
+                }
+            }
+        }
+        foreach (var g in go.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+        {
+            if (g.material != null && g.material.shader != null && (!g.material.shader.isSupported || g.material.shader.name == "Hidden/InternalErrorShader"))
+            {
+                g.material.shader = fallback;
+            }
+        }
     }
 
     private void Start()
