@@ -70,6 +70,23 @@ namespace Ro3Ios.Editor
             }
 
             Debug.Log($"[Ro3Ios.Build] Xcode project generated at {outDir}");
+
+            // Copy native iOS C/C++ plugins into generated Xcode project
+            string pluginsSrc = "Assets/Plugins/iOS";
+            string pluginsDst = Path.Combine(outDir, "Libraries/Plugins/iOS");
+            if (Directory.Exists(pluginsSrc))
+            {
+                Directory.CreateDirectory(pluginsDst);
+                foreach (var f in Directory.GetFiles(pluginsSrc))
+                {
+                    if (f.EndsWith(".c") || f.EndsWith(".cpp") || f.EndsWith(".m") || f.EndsWith(".mm") || f.EndsWith(".h"))
+                    {
+                        string dstFile = Path.Combine(pluginsDst, Path.GetFileName(f));
+                        File.Copy(f, dstFile, true);
+                        Debug.Log($"[Ro3Ios.Build] Injected native plugin: {Path.GetFileName(f)} -> {dstFile}");
+                    }
+                }
+            }
         }
 
         static string GetArg(string name, string defaultValue)

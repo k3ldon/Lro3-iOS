@@ -103,6 +103,20 @@ jobs:
 
       - name: Build Xcode Archive with Clang / LLVM
         run: |
+          echo "== Compiling native plugins (fsni, xlua stubs, ro3_chunk) into libPlugins.a =="
+          ISYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p native-build
+          clang -c -arch arm64 -isysroot "$ISYSROOT" -miphoneos-version-min=14.0 -O3 -fPIC \
+            unity-template/Assets/Plugins/iOS/fsni_darwin.c \
+            unity-template/Assets/Plugins/iOS/ro3_chunk.c \
+            unity-template/Assets/Plugins/iOS/stubs_ios.c
+          mv *.o native-build/
+          ar rcs xcode/Libraries/libPlugins.a native-build/*.o
+          echo "Created xcode/Libraries/libPlugins.a"
+
+          echo "== Patching UnityFramework other linker flags to link libPlugins.a and sqlite3 =="
+          sed -i '' 's/-lGameAssembly/-lGameAssembly -lPlugins -lsqlite3/g' xcode/Unity-iPhone.xcodeproj/project.pbxproj || true
+
           cd xcode
           mkdir -p Il2CppOutputProject/Source/il2cppOutput
           [ -f Il2CppOutputProject/Source/il2cppOutput/dummy.cpp ] || echo "// IL2CPP dummy" > Il2CppOutputProject/Source/il2cppOutput/dummy.cpp
