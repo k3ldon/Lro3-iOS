@@ -19,6 +19,18 @@ namespace Ro3Ios.Editor
             PlayerSettings.SetArchitecture(BuildTargetGroup.iOS, 1);
             PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.iOS, ManagedStrippingLevel.Minimal);
 
+            int preloadedCount = 0;
+            foreach (var importer in PluginImporter.GetAllImporters())
+            {
+                if (importer.assetPath.StartsWith("Assets/Plugins/Game/"))
+                {
+                    importer.SetCompatibleWithPlatform(BuildTarget.iOS, true);
+                    importer.isPreloaded = true;
+                    preloadedCount++;
+                }
+            }
+            Debug.Log($"[Ro3Ios.Build] Configured {preloadedCount} game plugins with isPreloaded=true for iOS AOT inclusion");
+
             PlayerSettings.iOS.sdkVersion = iOSSdkVersion.DeviceSDK;
             PlayerSettings.iOS.targetOSVersionString = "14.0";
             PlayerSettings.bundleVersion = GetArg("-ro3Version", "1.0.0");
