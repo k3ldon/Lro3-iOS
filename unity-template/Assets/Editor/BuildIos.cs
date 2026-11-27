@@ -33,6 +33,9 @@ namespace Ro3Ios.Editor
 
             PlayerSettings.iOS.sdkVersion = iOSSdkVersion.DeviceSDK;
             PlayerSettings.iOS.targetOSVersionString = "14.0";
+            PlayerSettings.iOS.locationUsageDescription = "Location required for game regional servers";
+            PlayerSettings.iOS.cameraUsageDescription = "Camera used for profile photos";
+            PlayerSettings.iOS.microphoneUsageDescription = "Microphone used for voice chat";
             PlayerSettings.bundleVersion = GetArg("-ro3Version", "1.0.0");
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.iOS, "com.ro3emu.client");
             PlayerSettings.productName = "Lagnarok RO3";
