@@ -471,7 +471,7 @@ static UnityFramework* UnityFrameworkLoad(void) {
         case 1: {
             // Server status: wait for live.json fetch to update the label
             __weak typeof(self) weakSelf = self;
-            [self waitForCondition:8.0 poll:0.3 condition:^BOOL {
+            [self waitForCondition:25.0 poll:0.3 condition:^BOOL {
                 NSString *t = weakSelf.serverStatusLabel.text ?: @"";
                 return [t rangeOfString:@"("].location != NSNotFound;
             } onTimeout:^{
