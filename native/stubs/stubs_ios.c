@@ -7,6 +7,7 @@
 EXPORT void* _ro3_stub_zero(void) { return NULL; }
 
 // Missing fsni helpers
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
