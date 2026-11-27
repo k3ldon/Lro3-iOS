@@ -54,10 +54,24 @@ namespace Ro3Ios.Shell
                 {
                     go.AddComponent<HappyEngine.Base.CoroutineManager>();
                 }
-                if (go.GetComponent<Launcher>() == null)
+
+                // Check if the official game Launcher (from Assembly-CSharp) is attached
+                var components = go.GetComponents<MonoBehaviour>();
+                bool hasOfficialLauncher = false;
+                foreach (var c in components)
                 {
-                    Debug.Log("[Ro3Startup] Attaching Launcher component to instantiated prefab");
-                    go.AddComponent<Launcher>();
+                    if (c != null && c.GetType().Name == "Launcher" && string.IsNullOrEmpty(c.GetType().Namespace))
+                    {
+                        hasOfficialLauncher = true;
+                        Debug.Log("[Ro3Startup] Official Assembly-CSharp Launcher component found on prefab! Letting official URP boot sequence run...");
+                        break;
+                    }
+                }
+
+                if (!hasOfficialLauncher && go.GetComponent<Ro3Ios.Shell.Launcher>() == null)
+                {
+                    Debug.Log("[Ro3Startup] Official Launcher not found on prefab, attaching Ro3Ios.Shell.Launcher fallback");
+                    go.AddComponent<Ro3Ios.Shell.Launcher>();
                 }
             }
 
