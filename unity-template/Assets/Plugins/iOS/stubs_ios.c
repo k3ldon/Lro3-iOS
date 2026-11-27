@@ -6,6 +6,37 @@
 // Generic dummy for any function
 EXPORT void* _ro3_stub_zero(void) { return NULL; }
 
+// Missing fsni helpers
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+EXPORT void* fsni_alloc(size_t sz) { return malloc(sz); }
+EXPORT void fsni_free(void* ptr) { free(ptr); }
+EXPORT void fsni_cleanup(void) { }
+EXPORT void* fsni_memdup(const void* src, size_t sz) {
+    if (!src || !sz) return NULL;
+    void* d = malloc(sz);
+    if (d) memcpy(d, src, sz);
+    return d;
+}
+EXPORT char* fsni_strdup(const char* s) { return s ? strdup(s) : NULL; }
+EXPORT char* fsni_strndup(const char* s, size_t n) { return s ? strndup(s, n) : NULL; }
+EXPORT size_t fsni_strlen(const char* s) { return s ? strlen(s) : 0; }
+EXPORT int32_t fsni_exists(const char* path) { return (path && access(path, F_OK) == 0) ? 1 : 0; }
+EXPORT int64_t fsni_getsize(const char* path) {
+    if (!path) return -1;
+    struct stat st;
+    return stat(path, &st) == 0 ? (int64_t)st.st_size : -1;
+}
+EXPORT int32_t fsni_remove(const char* path) { return path ? unlink(path) : -1; }
+EXPORT int32_t fsni_rename(const char* oldp, const char* newp) { return (oldp && newp) ? rename(oldp, newp) : -1; }
+
+// Missing sqlite3 stubs
+EXPORT int32_t sqlite3_enable_load_extension(void* db, int32_t onoff) { return 0; }
+EXPORT int32_t sqlite3_win32_set_directory(int32_t type, void* zValue) { return 0; }
+
 // Wwise stubs
 EXPORT int32_t AkSoundEngine_Init(void* settings) { return 1; }
 EXPORT int32_t AkSoundEngine_Term(void) { return 1; }
