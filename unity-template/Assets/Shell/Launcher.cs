@@ -5,8 +5,10 @@ using Ro3Ios.Hooks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class Launcher : MonoBehaviour
+namespace Ro3Ios.Shell
 {
+    public class Launcher : MonoBehaviour
+    {
     private void Awake()
     {
         Debug.Log("[Launcher] Awake executed!");
@@ -88,4 +90,5 @@ public class Launcher : MonoBehaviour
 
         Debug.LogError("[Launcher] Failed to load GameMain scene bundle at: " + gameMainBundlePath);
     }
+}
 }

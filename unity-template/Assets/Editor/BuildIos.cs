@@ -31,7 +31,11 @@ namespace Ro3Ios.Editor
             }
             Debug.Log($"[Ro3Ios.Build] Configured {preloadedCount} game plugins with isPreloaded=true for iOS AOT inclusion");
 
-            PlayerSettings.iOS.sdkVersion = iOSSdkVersion.DeviceSDK;
+            string sdkMode = GetArg("-ro3Sdk", "Device");
+            PlayerSettings.iOS.sdkVersion = sdkMode.Equals("Simulator", StringComparison.OrdinalIgnoreCase)
+                ? iOSSdkVersion.SimulatorSDK
+                : iOSSdkVersion.DeviceSDK;
+            Debug.Log($"[Ro3Ios.Build] Building for iOS SDK: {PlayerSettings.iOS.sdkVersion}");
             PlayerSettings.iOS.targetOSVersionString = "14.0";
             PlayerSettings.iOS.locationUsageDescription = "Location required for game regional servers";
             PlayerSettings.iOS.cameraUsageDescription = "Camera used for profile photos";

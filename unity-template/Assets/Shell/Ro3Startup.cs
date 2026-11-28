@@ -68,10 +68,10 @@ namespace Ro3Ios.Shell
                     }
                 }
 
-                if (!hasOfficialLauncher && go.GetComponent<Ro3Ios.Shell.Launcher>() == null)
+                if (!hasOfficialLauncher && go.GetComponent<Launcher>() == null)
                 {
-                    Debug.Log("[Ro3Startup] Official Launcher not found on prefab, attaching Ro3Ios.Shell.Launcher fallback");
-                    go.AddComponent<Ro3Ios.Shell.Launcher>();
+                    Debug.Log("[Ro3Startup] Official Launcher not found on prefab, attaching Launcher fallback");
+                    go.AddComponent<Launcher>();
                 }
             }
 
