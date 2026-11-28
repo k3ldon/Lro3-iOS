@@ -136,15 +136,23 @@ jobs:
           echo "launched"
           sleep 3
 
-      - name: Capture Screenshot
+      - name: Run E2E Assertions and Continuous Screenshots
         run: |
-          xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot e2e-screenshot-launcher.png || true
-          ls -lh e2e-screenshot-launcher.png || true
+          mkdir -p screenshots
+          xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot screenshots/e2e-01-initial.png || true
 
-      - name: Run E2E Assertions on Logs
-        run: |
-          echo "== Waiting for E2E sequence to complete (up to 120 s) =="
+          echo "== Waiting for E2E sequence to complete and capturing milestones (up to 120 s) =="
           for i in $(seq 1 120); do
+            if [ "$i" -eq 10 ]; then
+              xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot screenshots/e2e-02-status-checked.png || true
+            elif [ "$i" -eq 25 ]; then
+              xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot screenshots/e2e-03-verified.png || true
+            elif [ "$i" -eq 45 ]; then
+              xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot screenshots/e2e-04-handoff.png || true
+            elif [ "$i" -eq 75 ]; then
+              xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot screenshots/e2e-05-in-game.png || true
+            fi
+
             if grep -q "ALL-PASS" e2e-console.log 2>/dev/null; then
               echo "E2E ALL-PASS found after ${i}s"; break
             fi
@@ -153,6 +161,9 @@ jobs:
             fi
             sleep 1
           done
+
+          xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot screenshots/e2e-06-final.png || true
+          ls -lh screenshots/
 
           echo "== E2E log dump =="
           cat e2e-console.log || true
@@ -174,10 +185,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-simulator-logs
+          name: e2e-simulator-logs-and-screenshots
           path: |
             e2e-console.log
-            e2e-screenshot-launcher.png
+            screenshots/*.png
           retention-days: 14
           if-no-files-found: warn
 
